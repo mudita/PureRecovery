@@ -4,6 +4,8 @@
 #include <string.h>
 #include "dir_walker.h"
 
+#define MAX_PATH_LENGTH 1024
+
 void recursive_dir_walker_init(struct dir_handler_s *s,
                                int (*callback)(const char *path, enum dir_handling_type_e what, struct dir_handler_s *h,
                                                void *), void *data) {
@@ -53,11 +55,11 @@ void recursive_dir_walker(const char *name, struct dir_handler_s *h, unsigned in
     }
 
     while ((entry = readdir(dir)) != NULL) {
-        char path[1024] = {0};
+        char path[MAX_PATH_LENGTH] = {0};
         if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
             continue;
         }
-        if (strlen(name) + strlen(entry->d_name) > 1024) {
+        if (strlen(name) + strlen(entry->d_name) > MAX_PATH_LENGTH) {
             h->error = DirHandlingPathTooLong;
             break;
         }

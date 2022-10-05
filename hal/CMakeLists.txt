@@ -17,12 +17,14 @@ PUBLIC
     lwext4
 PRIVATE
     system
+    segger::rtt
 )
 
 # Includes
 target_include_directories( ${LIB_NAME}
 PUBLIC
     include
+    src/display
 )
 
 target_compile_options( ${LIB_NAME} PRIVATE

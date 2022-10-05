@@ -1,9 +1,7 @@
 #include <hal/console.h>
 #include <fsl_common.h>
 #include <fsl_lpuart.h>
-#include <fsl_edma.h>
-#include <fsl_lpuart_edma.h>
-#include <fsl_dmamux.h>
+#include <SEGGER_RTT.h>
 
 
 #ifndef CONSOLE_UART_DEVICE
@@ -62,6 +60,7 @@ int debug_console_init(void)
  */
 int debug_console_write(const char *buffer, size_t len)
 {
+    SEGGER_RTT_Write(0,buffer,len);
     LPUART_WriteBlocking(CONSOLE_UART_DEVICE, (uint8_t*) buffer, len);
     return len;
 }

@@ -10,11 +10,13 @@
 #include <seatest/seatest.h>
 #include "test_suite_vfs.h"
 #include "test_suite_crypto.h"
+#include "test_suite_db.h"
 
 static void all_tests(void)
 {
     test_fixture_vfs();
     test_suite_crypto();
+    test_suite_db();
 }
 
 int __attribute__((noinline, used)) main()

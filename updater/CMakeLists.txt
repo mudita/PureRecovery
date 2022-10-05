@@ -17,6 +17,7 @@ target_sources(
     ${UPDATER}
     PRIVATE
     ${SRC_FILES}
+    common/common/database.c
     )
 
 # Libraries

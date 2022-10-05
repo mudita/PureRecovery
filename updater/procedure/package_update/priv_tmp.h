@@ -17,6 +17,8 @@ bool tmp_create_catalog(struct update_handle_s *handle);
 /// 2. recursive: from {catalog}/{handle_user} move to {handle user}
 bool tmp_files_move(struct update_handle_s *handle);
 
+bool user_files_move_test(const char* const from, const char* const to);
+
 bool recursive_unlink(const char *what, bool factory_reset);
 
 #ifdef __cplusplus

@@ -25,6 +25,7 @@ target_link_libraries( ${TARGET_TEST}
     system-runtime-objs 
     hal
     seatest
+    common
 )
 
 #include(secure-boot)

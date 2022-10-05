@@ -21,8 +21,7 @@ enum tmp_error_e {
     ErrorTmpWalk,
 };
 
-int unlink_callback(const char *path, enum dir_handling_type_e what, struct dir_handler_s *h, void *d) {
-
+static int unlink_callback(const char *path, enum dir_handling_type_e what, struct dir_handler_s *h, void *d) {
     int ret = 0;
     (void) h;
     struct unlink_data_s *data = (struct unlink_data_s *) (d);
@@ -55,7 +54,6 @@ int unlink_callback(const char *path, enum dir_handling_type_e what, struct dir_
     }
     if (ret != 0) {
         debug_log("Unlink: unlink error: %d", ret);
-
     }
     return ret;
 }
@@ -93,7 +91,7 @@ bool recursive_unlink(const char *what, bool factory_reset) {
         recursive_dir_walker_deinit(&handle_walk);
 
         if (handle_walk.error) {
-            debug_log("Unlink: walker error. errno: %d", errno);
+            debug_log("Unlink: walker error %d (%s)", errno, strerror(errno));
             success = false;
             break;
         }
@@ -102,8 +100,7 @@ bool recursive_unlink(const char *what, bool factory_reset) {
     return success;
 }
 
-static bool create_single(const char *what, struct update_handle_s *handle) {
-    (void) handle;
+static bool create_single(const char *what) {
     bool success = true;
 
     struct stat data;
@@ -135,12 +132,12 @@ bool tmp_create_catalog(struct update_handle_s *handle) {
     bool retval = true;
     debug_log("TMP dir: create temp catalog");
 
-    if (!create_single(handle->tmp_os, handle)) {
+    if (!create_single(handle->tmp_os)) {
         retval = false;
         goto exit;
     }
 
-    if (!create_single(handle->tmp_user, handle)) {
+    if (!create_single(handle->tmp_user)) {
         retval = false;
         goto exit;
     }
@@ -165,7 +162,7 @@ int mv_callback(const char *path, enum dir_handling_type_e what, struct dir_hand
     char *sanitized_path = path_sanitize(dir_root, path_to_sanitize);
     size_t final_path_size = strlen(sanitized_path) + strlen(data->to) + 2;
     char *final_path = (char *) calloc(1, final_path_size);
-    snprintf(final_path,final_path_size, "%s/%s", data->to, sanitized_path);
+    snprintf(final_path, final_path_size, "%s/%s", data->to, sanitized_path);
 
     debug_log("TMP move: path: %s", final_path);
 
@@ -180,11 +177,11 @@ int mv_callback(const char *path, enum dir_handling_type_e what, struct dir_hand
             break;
         case DirHandlingFile: {
             struct stat data;
-            ret = stat(final_path, &data);
-            if (ret == 0) {
+            ret = stat(final_path, &data); // Check if file already exists and remove if it does
+            if (ret == ENOENT) {
                 ret = unlink(final_path);
                 if (ret != 0) {
-                    debug_log("TMP move: unlinking old file failed %d", ret);
+                    debug_log("TMP move: unlinking existing file failed %d", ret);
                     goto exit;
                 }
             }
@@ -250,5 +247,38 @@ bool tmp_files_move(struct update_handle_s *handle) {
     }
 
     exit:
+    return success;
+}
+
+bool user_files_move_test(const char* const from, const char* const to) {
+    bool success = true;
+
+    do {
+        /* TODO the creation of catalog should be split from moving */
+        debug_log("Move: creating test catalog for user files...");
+        if(!create_single(to)) {
+            debug_log("Move: failed to remove source catalog");
+            success = false;
+            break;
+        }
+
+        debug_log("Move: moving user data from %s to %s", from, to);
+        if(!recursive_mv(from, to)) {
+            debug_log("Move: failed to remove source catalog");
+            success = false;
+            break;
+        }
+
+        debug_log("Move: removing source catalog %s", from);
+
+        int err = rmdir(from);
+        if (err) {
+            debug_log("Move: failed to remove source catalog, error %d (%s)", err, strerror(err));
+            success = false;
+            break;
+        }
+
+    } while(0);
+
     return success;
 }

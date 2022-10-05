@@ -1,10 +1,10 @@
 #include "log.h"
 
+#define BUFFER_SIZE 512
 const char *log_filename = "/user/updater.log";
-const unsigned int buffer_size = 512;
 
 void debug_log_impl(const char *file, const char *func, int line, const char *msg, ...) {
-    char str[buffer_size];
+    char str[BUFFER_SIZE];
     int length = -1;
     va_list argList;
     va_start(argList, msg);
