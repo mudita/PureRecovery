@@ -3,7 +3,7 @@
 
 #include "test_suite_db.h"
 #include <seatest/seatest.h>
-#include <common/database.h>
+#include <database.h>
 #include <hal/delay.h>
 #include <stdint.h>
 

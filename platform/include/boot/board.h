@@ -200,8 +200,6 @@
 #define BOARD_SD_HOST_SUPPORT_SDR104_FREQ (200000000U)
 #define BOARD_SD_HOST_SUPPORT_HS200_FREQ (180000000U)
 
-#define UNUSED(x) ((void)(x))
-
 /* Select USB1 PLL PFD0 (720 MHz) as lpspi clock source */
 #define BOARD_EINK_LPSPI_CLOCK_SOURCE_SELECT (1U)
 /* Clock divider for master lpspi clock source */

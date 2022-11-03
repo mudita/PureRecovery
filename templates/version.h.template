@@ -1,0 +1,4 @@
+#pragma once
+static const char* GIT_REV="${GIT_REV}";
+static const char* GIT_BRANCH="${GIT_BRANCH}";
+static const char* VERSION="${PROJECT_VERSION}";

@@ -21,8 +21,7 @@ struct stat;
 struct statvfs;
 
 //! Filesystem type
-typedef enum vfs_filesystem_type
-{
+typedef enum vfs_filesystem_type {
     vfs_fs_auto,        //! Auto mount
     vfs_fs_fat,         //! File type fat
     vfs_fs_littlefs,    //! File type littlefs
@@ -30,8 +29,7 @@ typedef enum vfs_filesystem_type
 } vfs_filesystem_type_t;
 
 //! Tiny VFS mount point
-typedef struct vfs_mount_point_desc
-{
+typedef struct vfs_mount_point_desc {
     short disk;                 //! Mount the disc
     short partition;            //! Partition number on the EMMC disc
     vfs_filesystem_type_t type; //! Filesystem type
@@ -39,8 +37,7 @@ typedef struct vfs_mount_point_desc
 } vfs_mount_point_desc_t;
 
 //! Structure representing file
-struct vfs_file
-{
+struct vfs_file {
     void *filep;                // File pointer
     const struct vfs_mount *mp; // VFS mount point
     int flags;                  // Open flags
@@ -50,12 +47,16 @@ struct vfs_file
 struct vfs_mount_entry;
 
 //! Structure representing file
-struct vfs_dir
-{
+struct vfs_dir {
     struct vfs_mount_entry *next_mnt; //Directory pointer
     const struct vfs_mount *mp;       //Mount point
     void *dirp;                       // Structure directory pointer
 };
+
+#ifdef __cplusplus
+extern "C"
+{
+#endif
 
 /**
  * Initialize the mini virtual file system by the mount points given as an argument
@@ -190,3 +191,17 @@ int vfs_statvfs(const char *abs_path, struct statvfs *stat);
  * @error errno or 0 if success
  */
 int vfs_readmount(int *index, const char **name);
+
+/** VFS chdir
+ * @see man chdir
+ */
+int vfs_chdir(const char *path);
+
+/** VFS getcwd
+ * @see man getcwd
+ */
+int vfs_getcwd(char *buffer, size_t size);
+
+#ifdef __cplusplus
+}
+#endif

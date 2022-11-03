@@ -1,3 +1,6 @@
 build*
-.*
+.idea/*
+!.idea/runConfigurations/
+.gdbinit
 compile_commands.json
+luarecovery/config.ld

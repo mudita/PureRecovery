@@ -16,10 +16,13 @@
 [submodule "thirdparty/md5/src/md5"]
 	path = thirdparty/md5/src/md5
 	url = ../md5
-[submodule "thirdparty/cjson/src/cJSON"]
-	path = thirdparty/cjson/src/cJSON
-	url = https://github.com/DaveGamble/cJSON.git
 [submodule "thirdparty/lwext4/src"]
 	path = thirdparty/lwext4/src
 	url = ../lwext4.git
 	branch = mudita
+[submodule "thirdparty/lua/src"]
+	path = thirdparty/lua/src
+	url = https://github.com/lua/lua
+[submodule "thirdparty/lualibs/luafilesystem/src"]
+	path = thirdparty/lualibs/luafilesystem/src
+	url = https://github.com/lunarmodules/luafilesystem

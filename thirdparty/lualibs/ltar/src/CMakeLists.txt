@@ -1,0 +1,1 @@
+add_library(ltar lmicrotar.c microtar.c)

@@ -27,6 +27,8 @@ struct vfs_context
     struct vfs_mount_entry *fopsl;	   // FIlesystem entry list
     struct vfs_filesystem_entry *fste; // Filesystem entry
     size_t num_fse;					   // Filesystem ops
+    struct vfs_mount* current_mnt;     // Current mount point
+    char cwd[PATH_MAX];                // Current working directory
 };
 
 // VFS context state
@@ -44,11 +46,39 @@ static const struct vfs_filesystem_ops *fs_type_get(vfs_filesystem_type_t type)
     return NULL;
 }
 
+static int fs_build_abs_path(const char* mount_path,const char* path,char * result){
+    if(mount_path == NULL || path == NULL || result == NULL){
+        return -EINVAL;
+    }
+
+    // Check if absolute path
+    if(path[0] == '/'){
+        strcpy(result,path);
+    }else{
+        // Construct absolute path from the current working directory and path
+        sprintf(result,"%s/%s",ctx.cwd,path);
+    }
+
+    return 0;
+}
+
 static int fs_get_mnt_point(struct vfs_mount **mnt_pntp, const char *name, size_t *match_len)
 {
     struct vfs_mount *mnt_p = NULL;
     size_t longest_match = 0;
+
+    if ((name == NULL) || (strlen(name) <= 1))
+    {
+        return -EINVAL;
+    }
     size_t len, name_len = strlen(name);
+
+    // Check if not absolute path
+    if(name[0] != '/'){
+        *mnt_pntp = ctx.current_mnt;
+        return 0;
+    }
+
     for (struct vfs_mount_entry *e = ctx.fopsl; e; e = e->next)
     {
         struct vfs_mount_entry *itr = e;
@@ -194,6 +224,9 @@ int vfs_mount(struct vfs_mount *mp, int device)
         printf("vfs warn: %s Filesystem mount error %i (%s)\n", __PRETTY_FUNCTION__, err, strerror(-err));
         return err;
     }
+    ctx.current_mnt = mp;
+    strncpy(ctx.cwd,ctx.current_mnt->mnt_point,sizeof(ctx.cwd));
+
     /* Update mount point data and append it to the list */
     mp->mountp_len = len;
     mp->fs = fs;
@@ -276,13 +309,6 @@ int vfs_open(struct vfs_file *filp, const char *file_name, int flags, mode_t mod
     filp->flags = flags;
     filp->mode = mode;
 
-    if ((file_name == NULL) ||
-            (strlen(file_name) <= 1) || (file_name[0] != '/'))
-    {
-        printf("vfs: %s Invalid file name\n", __PRETTY_FUNCTION__);
-        return -EINVAL;
-    }
-
     int err = fs_get_mnt_point(&mp, file_name, NULL);
     if (err < 0)
     {
@@ -294,7 +320,9 @@ int vfs_open(struct vfs_file *filp, const char *file_name, int flags, mode_t mod
 
     if (filp->mp->fs->open != NULL)
     {
-        err = filp->mp->fs->open(filp, file_name, flags, mode);
+        char abs_path[PATH_MAX] = {};
+        fs_build_abs_path(mp->mnt_point,file_name, abs_path);
+        err = filp->mp->fs->open(filp, abs_path, flags, mode);
         if (err < 0)
         {
             return err;
@@ -473,26 +501,19 @@ int vfs_sync(struct vfs_file *filp)
 }
 
 /* Directory operations */
-int vfs_opendir(struct vfs_dir *dirp, const char *abs_path)
+int vfs_opendir(struct vfs_dir *dirp, const char *path)
 {
     struct vfs_mount *me;
     int err = -EINVAL;
 
-    if ((abs_path == NULL) ||
-            (strlen(abs_path) < 1) || (abs_path[0] != '/'))
-    {
-        printf("vfs: %s Invalid filename \n", __PRETTY_FUNCTION__);
-        return -EINVAL;
-    }
-
-    if (strcmp(abs_path, "/") == 0)
+    if (strcmp(path, "/") == 0)
     {
 
         dirp->mp = NULL;
         dirp->next_mnt = ctx.fopsl;
         return 0;
     }
-    err = fs_get_mnt_point(&me, abs_path, NULL);
+    err = fs_get_mnt_point(&me, path, NULL);
     if (err < 0)
     {
         printf("vfs: %s Mount point not found\n", __PRETTY_FUNCTION__);
@@ -501,6 +522,8 @@ int vfs_opendir(struct vfs_dir *dirp, const char *abs_path)
     dirp->mp = me;
     if (dirp->mp->fs->opendir != NULL)
     {
+        char abs_path[PATH_MAX] = {};
+        fs_build_abs_path(me->mnt_point,path, abs_path);
         err = dirp->mp->fs->opendir(dirp, abs_path);
         if (err < 0)
         {
@@ -625,20 +648,12 @@ int vfs_closedir(struct vfs_dir *dirp)
 }
 
 /* Filesystem operations */
-int vfs_mkdir(const char *abs_path)
+int vfs_mkdir(const char *path)
 {
     struct vfs_mount *mp;
     int err = -EINVAL;
 
-    if ((abs_path == NULL) ||
-            (strlen(abs_path) <= 1) || (abs_path[0] != '/'))
-    {
-
-        printf("vfs: %s Invalid filename\n", __PRETTY_FUNCTION__);
-        return -EINVAL;
-    }
-
-    err = fs_get_mnt_point(&mp, abs_path, NULL);
+    err = fs_get_mnt_point(&mp, path, NULL);
     if (err < 0)
     {
         printf("vfs: %s Mount point not found\n", __PRETTY_FUNCTION__);
@@ -647,6 +662,9 @@ int vfs_mkdir(const char *abs_path)
 
     if (mp->fs->mkdir != NULL)
     {
+        char abs_path[PATH_MAX] = {};
+        fs_build_abs_path(mp->mnt_point,path, abs_path);
+
         err = mp->fs->mkdir(mp, abs_path);
         if (err < 0)
         {
@@ -660,19 +678,12 @@ int vfs_mkdir(const char *abs_path)
     return err;
 }
 
-int vfs_unlink(const char *abs_path)
+int vfs_unlink(const char *path)
 {
     struct vfs_mount *mp;
     int err = -EINVAL;
 
-    if ((abs_path == NULL) ||
-            (strlen(abs_path) <= 1) || (abs_path[0] != '/'))
-    {
-        printf("vfs: %s Invalid filename\n", __PRETTY_FUNCTION__);
-        return -EINVAL;
-    }
-
-    err = fs_get_mnt_point(&mp, abs_path, NULL);
+    err = fs_get_mnt_point(&mp, path, NULL);
     if (err < 0)
     {
         printf("vfs: %s Mount point not found\n", __PRETTY_FUNCTION__);
@@ -681,6 +692,8 @@ int vfs_unlink(const char *abs_path)
 
     if (mp->fs->unlink != NULL)
     {
+        char abs_path[PATH_MAX] = {};
+        fs_build_abs_path(mp->mnt_point,path, abs_path);
         err = mp->fs->unlink(mp, abs_path);
         if (err < 0)
         {
@@ -694,19 +707,12 @@ int vfs_unlink(const char *abs_path)
     return err;
 }
 
-int vfs_rmdir(const char *abs_path)
+int vfs_rmdir(const char *path)
 {
     struct vfs_mount *mp;
     int err = -EINVAL;
 
-    if ((abs_path == NULL) ||
-            (strlen(abs_path) <= 1) || (abs_path[0] != '/'))
-    {
-        printf("vfs: %s Invalid filename\n", __PRETTY_FUNCTION__);
-        return -EINVAL;
-    }
-
-    err = fs_get_mnt_point(&mp, abs_path, NULL);
+    err = fs_get_mnt_point(&mp, path, NULL);
     if (err < 0)
     {
         printf("vfs: %s Mount point not found\n", __PRETTY_FUNCTION__);
@@ -715,6 +721,8 @@ int vfs_rmdir(const char *abs_path)
 
     if (mp->fs->rmdir != NULL)
     {
+        char abs_path[PATH_MAX] = {};
+        fs_build_abs_path(mp->mnt_point,path, abs_path);
         err = mp->fs->rmdir(mp, abs_path);
         if (err < 0)
         {
@@ -734,8 +742,8 @@ int vfs_rename(const char *from, const char *to)
     size_t match_len;
     int err = -EINVAL;
 
-    if ((from == NULL) || (strlen(from) <= 1) || (from[0] != '/') ||
-            (to == NULL) || (strlen(to) <= 1) || (to[0] != '/'))
+    if ((from == NULL) || (strlen(from) <= 1) ||
+            (to == NULL) || (strlen(to) <= 1))
     {
         printf("vfs: %s Invalid filename\n", __PRETTY_FUNCTION__);
         return -EINVAL;
@@ -757,7 +765,11 @@ int vfs_rename(const char *from, const char *to)
 
     if (mp->fs->rename != NULL)
     {
-        err = mp->fs->rename(mp, from, to);
+        char abs_path_from[PATH_MAX] = {};
+        char abs_path_to[PATH_MAX] = {};
+        fs_build_abs_path(mp->mnt_point,from, abs_path_from);
+        fs_build_abs_path(mp->mnt_point,to, abs_path_to);
+        err = mp->fs->rename(mp, abs_path_from, abs_path_to);
         if (err < 0)
         {
             printf("vfs: %s Failed to rename %i (%s)\n", __PRETTY_FUNCTION__, err, strerror(-err));
@@ -770,19 +782,12 @@ int vfs_rename(const char *from, const char *to)
     return err;
 }
 
-int vfs_stat(const char *abs_path, struct stat *entry)
+int vfs_stat(const char *path, struct stat *entry)
 {
     struct vfs_mount *mp;
     int err = -EINVAL;
 
-    if ((abs_path == NULL) ||
-            (strlen(abs_path) <= 1) || (abs_path[0] != '/'))
-    {
-        printf("vfs: %s Invalid filename\n", __PRETTY_FUNCTION__);
-        return -EINVAL;
-    }
-
-    err = fs_get_mnt_point(&mp, abs_path, NULL);
+    err = fs_get_mnt_point(&mp, path, NULL);
     if (err < 0)
     {
         printf("vfs: %s Mount point not found\n", __PRETTY_FUNCTION__);
@@ -791,11 +796,9 @@ int vfs_stat(const char *abs_path, struct stat *entry)
 
     if (mp->fs->stat != NULL)
     {
+        char abs_path[PATH_MAX] = {};
+        fs_build_abs_path(mp->mnt_point,path, abs_path);
         err = mp->fs->stat(mp, abs_path, entry);
-        if (err < 0)
-        {
-            printf("vfs: %s Failed to stat %i (%s)\n", __PRETTY_FUNCTION__, err, strerror(-err));
-        }
     }
     else
     {
@@ -804,19 +807,12 @@ int vfs_stat(const char *abs_path, struct stat *entry)
     return err;
 }
 
-int vfs_statvfs(const char *abs_path, struct statvfs *stat)
+int vfs_statvfs(const char *path, struct statvfs *stat)
 {
     struct vfs_mount *mp;
     int err;
 
-    if ((abs_path == NULL) ||
-            (strlen(abs_path) <= 1) || (abs_path[0] != '/'))
-    {
-        printf("vfs: %s Invalid filename\n", __PRETTY_FUNCTION__);
-        return -EINVAL;
-    }
-
-    err = fs_get_mnt_point(&mp, abs_path, NULL);
+    err = fs_get_mnt_point(&mp, path, NULL);
     if (err < 0)
     {
         printf("vfs: %s Mount point not found\n", __PRETTY_FUNCTION__);
@@ -825,6 +821,8 @@ int vfs_statvfs(const char *abs_path, struct statvfs *stat)
 
     if (mp->fs->statvfs != NULL)
     {
+        char abs_path[PATH_MAX] = {};
+        fs_build_abs_path(mp->mnt_point,path, abs_path);
         err = mp->fs->statvfs(mp, abs_path, stat);
         if (err < 0)
         {
@@ -863,19 +861,12 @@ int vfs_readmount(int *index, const char **name)
     return err;
 }
 
-int vfs_chmod(const char *abs_path, mode_t mode)
+int vfs_chmod(const char *path, mode_t mode)
 {
     struct vfs_mount *mp;
     int err;
 
-    if ((abs_path == NULL) ||
-            (strlen(abs_path) <= 1) || (abs_path[0] != '/'))
-    {
-        printf("vfs: %s Invalid filename\n", __PRETTY_FUNCTION__);
-        return -EINVAL;
-    }
-
-    err = fs_get_mnt_point(&mp, abs_path, NULL);
+    err = fs_get_mnt_point(&mp, path, NULL);
     if (err < 0)
     {
         printf("vfs: %s Mount point not found\n", __PRETTY_FUNCTION__);
@@ -884,6 +875,8 @@ int vfs_chmod(const char *abs_path, mode_t mode)
 
     if (mp->fs->statvfs != NULL)
     {
+        char abs_path[PATH_MAX] = {};
+        fs_build_abs_path(mp->mnt_point,path, abs_path);
         err = mp->fs->chmod(mp, abs_path, mode);
         if (err < 0)
         {
@@ -895,5 +888,34 @@ int vfs_chmod(const char *abs_path, mode_t mode)
         err = -ENOTSUP;
     }
     return err;
+}
+
+int vfs_getcwd(char *buffer, size_t size) {
+    strncpy(buffer,ctx.cwd,size);
+    return 0;
+}
+
+int vfs_chdir(const char *path) {
+    struct vfs_mount *mp;
+
+    int err = fs_get_mnt_point(&mp, path, NULL);
+    if (err < 0)
+    {
+        printf("vfs: %s Mount point not found\n", __PRETTY_FUNCTION__);
+        return err;
+    }
+
+    // If path is absolute
+    if(path[0] == '/'){
+        /// Update the current mount point
+        ctx.current_mnt = mp;
+        strncpy(ctx.cwd,path,sizeof(ctx.cwd) - strlen(ctx.cwd));
+    }else{
+        /// Path is relative
+        sprintf(ctx.cwd,"/%s",path);
+        strncat(ctx.cwd,"/",sizeof(ctx.cwd) - strlen(ctx.cwd));
+        strncat(ctx.cwd,path,sizeof(ctx.cwd) - strlen(ctx.cwd));
+    }
+    return 0;
 }
 

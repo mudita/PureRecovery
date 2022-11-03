@@ -128,6 +128,25 @@ static void test_basic_write_files(void)
 }
 
 // Failed to open file test
+static void test_relative_open(void)
+{
+    const char *dirs_to_create[] = {"dir1"};
+    const char *files_to_open[] = {"test101.bin", "dir1/test002.bin"};
+
+    for(size_t dno = 0; dno< ARRAY_SIZE(dirs_to_create);dno++){
+        assert_true(mkdir(dirs_to_create[dno], 0666) == 0);
+        assert_true(rmdir(dirs_to_create[dno]) == 0);
+    }
+
+    for(size_t fno = 0; fno< ARRAY_SIZE(files_to_open);fno++){
+        FILE* fd = fopen(files_to_open[fno],"w");
+        assert_true(fd != NULL);
+        fclose(fd);
+        unlink(files_to_open[fno]);
+    }
+}
+
+// Failed to open file test
 static void test_failed_to_open_files(void)
 {
     assert_true(fopen(NULL, "r") == NULL);
@@ -702,6 +721,30 @@ static void test_speed_user(void)
     test_seq_write_after_umount("/user", 10, 100, 4 * 1024 * 1024, 16 * 1024, 64 * 1024);
 }
 
+static void test_getcwd(void){
+    char cwd[PATH_MAX] = {};
+    getcwd(cwd,sizeof(cwd));
+    assert_string_equal(cwd,"/user");
+}
+
+static void test_chdir(void){
+    char cwd[PATH_MAX] = {};
+    getcwd(cwd,sizeof(cwd));
+    assert_string_equal(cwd,"/user");
+
+    chdir("/os");
+    getcwd(cwd,sizeof(cwd));
+    assert_string_equal(cwd,"/os");
+
+    chdir("current");
+    getcwd(cwd,sizeof(cwd));
+    assert_string_equal(cwd,"/os/current");
+
+    chdir("/user/db");
+    getcwd(cwd,sizeof(cwd));
+    assert_string_equal(cwd,"/user/db");
+}
+
 // VFS test fixutre
 void test_fixture_vfs()
 {
@@ -720,5 +763,8 @@ void test_fixture_vfs()
     run_test(test_rename_user);
     // run_test(test_speed_os);
     // run_test(test_speed_user);
+    run_test(test_getcwd);
+    run_test(test_chdir);
+    run_test(test_relative_open);
     test_fixture_end();
 }

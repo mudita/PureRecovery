@@ -1,17 +1,15 @@
 #pragma once
 
 //! Lock unlock keyboard status
-typedef enum kbd_lock_status
-{
+typedef enum kbd_lock_status {
     kbd_unlocked,       //! kbd_ lock
     kbd_locked      //! kbd_ unlock
 } kbd_lock_status_t;
 
 //! Key indentifiers
-typedef enum kbd_key
-{
-    key_kbd_none    = 0,    //! No any events in the kbd queue
-	kbd_key_numeric1 = 31,
+typedef enum kbd_key {
+    key_kbd_none = 0,    //! No any events in the kbd queue
+    kbd_key_numeric1 = 31,
     kbd_key_numeric2 = 32,
     kbd_key_numeric3 = 33,
     kbd_key_numeric4 = 41,
@@ -30,8 +28,8 @@ typedef enum kbd_key
     kbd_joy_down = 22,
     kbd_joy_enter = 12,
 
-    kbd_fn_left = 21,//1,
-    kbd_fn_right = 23,//3,
+    kbd_fn_left = 21,
+    kbd_fn_right = 23,
 
     kbd_vol_up = 4,
     kbd_vol_down = 14,
@@ -45,8 +43,7 @@ typedef enum kbd_key
 
 
 //! kbd_ event type 
-typedef enum kbd_evtype
-{
+typedef enum kbd_evtype {
     kbd_pressed,    //! KBD is presssed
     kbd_released    //! KBD is released
 
@@ -68,8 +65,7 @@ int kbd_init();
  */
 int kbd_lock(kbd_lock_status_t lock);
 
-/** Read the key pressed
- * @param key Key structure with event
- * @return 0 on sucess otherwise error
+/** Read the key events
+ * @return table containing events on success otherwise NULL
  */
-int kbd_read_key( kbd_event_t* key );
+kbd_event_t *kbd_read_events();

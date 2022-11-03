@@ -12,14 +12,18 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+
 /**
   * @brief  LCD drawing Line alignment mode definitions
   */
-typedef enum eink_align_mode
-{
-  EINK_CENTER_MODE = 0x01, /*!< Center mode */
-  EINK_RIGHT_MODE = 0x02,  /*!< Right mode  */
-  EINK_LEFT_MODE = 0x03    /*!< Left mode   */
+typedef enum eink_align_mode {
+    EINK_CENTER_MODE = 0x01, /*!< Center mode */
+    EINK_RIGHT_MODE = 0x02,  /*!< Right mode  */
+    EINK_LEFT_MODE = 0x03    /*!< Left mode   */
 
 } eink_align_mode_t;
 
@@ -68,3 +72,9 @@ void eink_log_refresh();
 /** Clear eink log console
  */
 void eink_clear_log(void);
+
+void eink_write_rectangle(uint16_t x, uint16_t y, uint16_t w, uint16_t h, bool);
+
+#ifdef __cplusplus
+}
+#endif

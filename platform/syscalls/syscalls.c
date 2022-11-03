@@ -39,6 +39,7 @@ void *__dso_handle __attribute__((weak));
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/times.h>
+#include <sys/utime.h>
 #include <limits.h>
 #include <signal.h>
 
@@ -225,4 +226,14 @@ _wait(int *status __attribute__((unused)))
 {
   errno = ENOSYS;
   return -1;
+}
+
+int	lstat (const char *__restrict __path, struct stat *__restrict __buf ){
+    errno = ENOSYS;
+    return -1;
+}
+
+int utime(const char *filename, const struct utimbuf *times){
+    errno = ENOSYS;
+    return -1;
 }

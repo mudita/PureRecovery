@@ -20,6 +20,9 @@ PRIVATE
     segger::rtt
 )
 
+# Make function implementations from boot_reason.c available to the 'pure-core' library
+target_link_libraries(pure-core PRIVATE hal-common)
+
 # Includes
 target_include_directories( ${LIB_NAME}
 PUBLIC

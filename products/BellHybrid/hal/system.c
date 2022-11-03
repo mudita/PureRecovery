@@ -1,5 +1,4 @@
 #include <hal/system.h>
-#include <hal/boot_reason.h>
 #include <fsl_rtwdog.h>
 #include <fsl_snvs_hp.h>
 #include <fsl_snvs_lp.h>
@@ -9,8 +8,7 @@
 #include <hal/console.h>
 #include <hal/emmc.h>
 #include <hal/i2c_host.h>
-#include <hal/ED028TC1.h>
-#include <hal/keyboard.h>
+#include <hal/display.h>
 #include <hal/security.h>
 #include <prv/hal/i2c_dev.h>
 #include <boot/board.h>
@@ -36,8 +34,7 @@ void system_initialize(void)
         printf("Fatal: Unable to init EMMC card\n");
     }
 
-    //Initialize Eink display
-    EinkInitialize(Eink1Bpp);
+    eink_init();
 
     // Initialize the I2c controller
     if (!get_i2c_controller())

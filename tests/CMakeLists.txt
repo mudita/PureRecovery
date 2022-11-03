@@ -5,7 +5,7 @@ add_executable( ${TARGET_TEST} EXCLUDE_FROM_ALL)
 
 target_compile_options( ${TARGET_TEST} PRIVATE -Wall -Wextra -Wno-unused)
 
-file(GLOB_RECURSE SRC_FILES CONFIGURE_DEPENDS  
+file(GLOB_RECURSE SRC_FILES CONFIGURE_DEPENDS
     "src/*.c*"
 )
 
@@ -15,14 +15,14 @@ target_sources( ${TARGET_TEST} PRIVATE ${SRC_FILES} )
 target_compile_features(${TARGET_TEST} PRIVATE
     c_std_11
 )
-target_compile_options( ${TARGET_TEST} PRIVATE 
+target_compile_options( ${TARGET_TEST} PRIVATE
     -Wall -Wextra
 )
 
-target_link_libraries( ${TARGET_TEST} 
-    PRIVATE 
+target_link_libraries( ${TARGET_TEST}
+    PRIVATE
     system
-    system-runtime-objs 
+    system-runtime-objs
     hal
     seatest
     common
@@ -39,4 +39,4 @@ if (ENABLE_SECURE_BOOT)
 else()
     create_binary_output( ${TARGET_TEST} "bin")
 endif()
-add_custom_target( tests  DEPENDS ${TARGET_TEST}.bin)
+add_custom_target( on-target-tests  DEPENDS ${TARGET_TEST}.bin)
