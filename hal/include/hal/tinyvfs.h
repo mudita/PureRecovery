@@ -202,6 +202,14 @@ int vfs_chdir(const char *path);
  */
 int vfs_getcwd(char *buffer, size_t size);
 
+/** Get mount point struct
+ * @param type Pointer to pointer to mount point struct
+ * @param name Mount point name
+ * @param match_len TODO
+ * @error errno or 0 if success
+ */
+int vfs_get_mnt_point(struct vfs_mount **mnt_pntp, const char *name, size_t *match_len);
+
 #ifdef __cplusplus
 }
 #endif

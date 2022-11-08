@@ -60,7 +60,7 @@ void mount_all()
 {
     // fstab filesystem mounts
     static const vfs_mount_point_desc_t fstab[] = {
-        {.disk = blkdev_emmc_user, .partition = 1, .type = vfs_fs_fat, "/os"},
+        {.disk = blkdev_emmc_user, .partition = 1, .type = vfs_fs_auto, "/os"},
         {.disk = blkdev_emmc_user, .partition = 3, .type = vfs_fs_auto, "/user"},
     };
     printf("Initializing VFS subsystem...\n");

@@ -128,23 +128,23 @@ static int _is_successful(lua_State *L) {
 
 /**
  * Returns the active slot to boot into on the next boot.
- * @function get_active
+ * @function get_next_active
  * @return active @{slot}
  */
-static int _get_active(lua_State *L) {
-    lua_pushinteger(L, get_active());
+static int _get_next_active(lua_State *L) {
+    lua_pushinteger(L, get_next_active());
     return 1;
 }
 
 /**
- * Returns the string suffix used by partitions that
+ * Returns the string prefix used by partitions that
  * correspond to the slot number passed in parameter.
- * @function get_suffix
+ * @function get_prefix
  * @param slot @{slot}
  * @return prefix string
  */
-static int _get_suffix(lua_State *L) {
-    lua_pushstring(L, get_suffix(luaL_checkinteger(L, 1)));
+static int _get_prefix(lua_State *L) {
+    lua_pushstring(L, get_prefix(luaL_checkinteger(L, 1)));
     return 1;
 }
 
@@ -179,6 +179,16 @@ static int _get_binary_dir(lua_State *L) {
 }
 
 /**
+ * Returns the directory that stores unpacked update package contents
+ * @function get_update_dir
+ * @return string containing update directory name
+ */
+static int _get_update_dir(lua_State *L) {
+    lua_pushstring(L, get_update_dir());
+    return 1;
+}
+
+/**
  * Returns how many boot attempts left for specified slot.
  * @function get_boot_attempts_left
  * @param slot @{slot}
@@ -200,11 +210,12 @@ static const struct luaL_Reg functions[] = {
         {"get_boot_attempts_left", _get_boot_attempts_left},
         {"is_bootable",            _is_bootable},
         {"is_successful",          _is_successful},
-        {"get_active",             _get_active},
-        {"get_suffix",             _get_suffix},
+        {"get_next_active",        _get_next_active},
+        {"get_prefix",             _get_prefix},
         {"get_os",                 _get_os},
         {"get_recovery",           _get_recovery},
         {"get_binary_dir",         _get_binary_dir},
+        {"get_update_dir",         _get_update_dir},
         {NULL, NULL}
 };
 

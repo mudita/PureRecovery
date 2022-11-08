@@ -53,16 +53,16 @@ static int fs_build_abs_path(const char* mount_path,const char* path,char * resu
 
     // Check if absolute path
     if(path[0] == '/'){
-        strcpy(result,path);
+        strncpy(result,path,PATH_MAX);
     }else{
         // Construct absolute path from the current working directory and path
-        sprintf(result,"%s/%s",ctx.cwd,path);
+        snprintf(result,PATH_MAX,"%s/%s",ctx.cwd,path);
     }
 
     return 0;
 }
 
-static int fs_get_mnt_point(struct vfs_mount **mnt_pntp, const char *name, size_t *match_len)
+int vfs_get_mnt_point(struct vfs_mount **mnt_pntp, const char *name, size_t *match_len)
 {
     struct vfs_mount *mnt_p = NULL;
     size_t longest_match = 0;
@@ -309,7 +309,7 @@ int vfs_open(struct vfs_file *filp, const char *file_name, int flags, mode_t mod
     filp->flags = flags;
     filp->mode = mode;
 
-    int err = fs_get_mnt_point(&mp, file_name, NULL);
+    int err = vfs_get_mnt_point(&mp, file_name, NULL);
     if (err < 0)
     {
         printf("vfs: %s Mount point not found\n", __PRETTY_FUNCTION__);
@@ -513,7 +513,7 @@ int vfs_opendir(struct vfs_dir *dirp, const char *path)
         dirp->next_mnt = ctx.fopsl;
         return 0;
     }
-    err = fs_get_mnt_point(&me, path, NULL);
+    err = vfs_get_mnt_point(&me, path, NULL);
     if (err < 0)
     {
         printf("vfs: %s Mount point not found\n", __PRETTY_FUNCTION__);
@@ -653,7 +653,7 @@ int vfs_mkdir(const char *path)
     struct vfs_mount *mp;
     int err = -EINVAL;
 
-    err = fs_get_mnt_point(&mp, path, NULL);
+    err = vfs_get_mnt_point(&mp, path, NULL);
     if (err < 0)
     {
         printf("vfs: %s Mount point not found\n", __PRETTY_FUNCTION__);
@@ -683,7 +683,7 @@ int vfs_unlink(const char *path)
     struct vfs_mount *mp;
     int err = -EINVAL;
 
-    err = fs_get_mnt_point(&mp, path, NULL);
+    err = vfs_get_mnt_point(&mp, path, NULL);
     if (err < 0)
     {
         printf("vfs: %s Mount point not found\n", __PRETTY_FUNCTION__);
@@ -712,7 +712,7 @@ int vfs_rmdir(const char *path)
     struct vfs_mount *mp;
     int err = -EINVAL;
 
-    err = fs_get_mnt_point(&mp, path, NULL);
+    err = vfs_get_mnt_point(&mp, path, NULL);
     if (err < 0)
     {
         printf("vfs: %s Mount point not found\n", __PRETTY_FUNCTION__);
@@ -749,7 +749,7 @@ int vfs_rename(const char *from, const char *to)
         return -EINVAL;
     }
 
-    err = fs_get_mnt_point(&mp, from, &match_len);
+    err = vfs_get_mnt_point(&mp, from, &match_len);
     if (err < 0)
     {
         printf("vfs: %s Mount point not found\n", __PRETTY_FUNCTION__);
@@ -787,7 +787,7 @@ int vfs_stat(const char *path, struct stat *entry)
     struct vfs_mount *mp;
     int err = -EINVAL;
 
-    err = fs_get_mnt_point(&mp, path, NULL);
+    err = vfs_get_mnt_point(&mp, path, NULL);
     if (err < 0)
     {
         printf("vfs: %s Mount point not found\n", __PRETTY_FUNCTION__);
@@ -812,7 +812,7 @@ int vfs_statvfs(const char *path, struct statvfs *stat)
     struct vfs_mount *mp;
     int err;
 
-    err = fs_get_mnt_point(&mp, path, NULL);
+    err = vfs_get_mnt_point(&mp, path, NULL);
     if (err < 0)
     {
         printf("vfs: %s Mount point not found\n", __PRETTY_FUNCTION__);
@@ -866,7 +866,7 @@ int vfs_chmod(const char *path, mode_t mode)
     struct vfs_mount *mp;
     int err;
 
-    err = fs_get_mnt_point(&mp, path, NULL);
+    err = vfs_get_mnt_point(&mp, path, NULL);
     if (err < 0)
     {
         printf("vfs: %s Mount point not found\n", __PRETTY_FUNCTION__);
@@ -898,7 +898,7 @@ int vfs_getcwd(char *buffer, size_t size) {
 int vfs_chdir(const char *path) {
     struct vfs_mount *mp;
 
-    int err = fs_get_mnt_point(&mp, path, NULL);
+    int err = vfs_get_mnt_point(&mp, path, NULL);
     if (err < 0)
     {
         printf("vfs: %s Mount point not found\n", __PRETTY_FUNCTION__);
@@ -912,9 +912,7 @@ int vfs_chdir(const char *path) {
         strncpy(ctx.cwd,path,sizeof(ctx.cwd) - strlen(ctx.cwd));
     }else{
         /// Path is relative
-        sprintf(ctx.cwd,"/%s",path);
-        strncat(ctx.cwd,"/",sizeof(ctx.cwd) - strlen(ctx.cwd));
-        strncat(ctx.cwd,path,sizeof(ctx.cwd) - strlen(ctx.cwd));
+        snprintf(ctx.cwd + strlen(ctx.cwd),sizeof(ctx.cwd),"/%s",path);
     }
     return 0;
 }

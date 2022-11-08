@@ -9,8 +9,9 @@
 #include "common.h"
 #include <hal/boot_reason.h>
 #include <hal/delay.h>
-#include <flash_bootloader.h>
 #include <hal/boot_control.h>
+#include <flash_bootloader.h>
+#include <convert_fs.h>
 
 static const module_consts_t consts[] = {
         {NULL, 0}
@@ -99,7 +100,7 @@ static int _uptime(lua_State *L) {
  */
 static int _target_slot(lua_State *L) {
     UNUSED(L);
-    const char *slot = get_suffix(get_active());
+    const char *slot = get_prefix(get_next_active());
     lua_pushstring(L, slot);
     return 1;
 }
@@ -111,7 +112,7 @@ static int _target_slot(lua_State *L) {
  */
 static int _source_slot(lua_State *L) {
     UNUSED(L);
-    const char *slot = get_suffix(get_current_slot());
+    const char *slot = get_prefix(get_current_slot());
     lua_pushstring(L, slot);
     return 1;
 }
@@ -142,14 +143,17 @@ static int _flash_bootloader(lua_State *L) {
 }
 
 /***
- Change the existing system partition type from FAT to ext4
- @function fat_to_ext4
+ Change the existing system partition type from FAT to ext4 and fixes partition labels
+ @function repartition_fs
  @return operation status
  @warning Use it wisely as it is irreversible operation
  */
-static int _fat_to_ext4(lua_State *L) {
-    //const char *path = luaL_checkstring(L, 1);
-    //TODO:
+static int _repartition_fs(lua_State *L) {
+
+    enum convert_fs_state_e err = repartition_fs();
+    if (err == CONVERSION_FAILED) {
+        luaL_error(L, "Failed to repartition the file system");
+    }
     return 1;
 }
 
@@ -163,7 +167,7 @@ static const struct luaL_Reg functions[] = {
         {"source_slot",      _source_slot},
         {"user",             _user},
         {"flash_bootloader", _flash_bootloader},
-        {"fat_to_ext4",      _fat_to_ext4},
+        {"repartition_fs",   _repartition_fs},
         {NULL, NULL},
 };
 

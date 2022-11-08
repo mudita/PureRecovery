@@ -23,6 +23,10 @@ const char *path_basename_const(const char *path);
 
 bool path_check_if_exists(const char *path);
 
+bool recursive_unlink(const char *what);
+
+bool recursive_cp(const char *what, const char *where);
+
 #ifdef __cplusplus
 }
 #endif

@@ -16,6 +16,10 @@ void debug_log_impl(const char *file, const char *func, int line, const char *ms
 
 #define debug_log(...)  debug_log_impl(__FILENAME__,__func__, __LINE__, __VA_ARGS__)
 
+void redirect_logs_to_file(const char *name);
+
+void flush_logs();
+
 #ifdef __cplusplus
 }
 #endif

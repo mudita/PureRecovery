@@ -93,7 +93,7 @@ static const module_consts_t events_consts[] = {
  @param lock true for lock, otherwise unlock
  */
 static int _lock(lua_State *L) {
-    //kbd_lock()
+    kbd_lock(luaL_checkinteger(L, 1));
     return 1;
 }
 

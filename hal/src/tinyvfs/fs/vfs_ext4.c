@@ -160,14 +160,14 @@ static int ext_close(struct vfs_file *fp)
 
 static ssize_t ext_read(struct vfs_file *fp, void *ptr, size_t len)
 {
-    size_t rcnt;
+    size_t rcnt=0;
     ssize_t ret = ext4_fread(fp->filep, ptr, len, &rcnt);
     return (ret) ? (-ret) : ((ssize_t)rcnt);
 }
 
 static ssize_t ext_write(struct vfs_file *fp, const void *ptr, size_t len)
 {
-    size_t wcnt;
+    size_t wcnt=0;
     ssize_t ret = ext4_fwrite(fp->filep, ptr, len, &wcnt);
     return (ret) ? (-ret) : ((ssize_t)wcnt);
 }

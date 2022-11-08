@@ -6,7 +6,7 @@
 #include <lauxlib.h>
 
 #define UNUSED(expr) do { (void)(expr); } while (0)
-#define ARRAY_SIZE(array)       (sizeof(array)/sizeof(array[0]))
+#define ARRAY_SIZE(array)       (sizeof(array)/sizeof((array)[0]))
 
 typedef struct {
     const char *name;
@@ -15,6 +15,6 @@ typedef struct {
 
 void register_module(lua_State *L, const luaL_Reg *const fns, const module_consts_t *const consts, const char *name);
 
-void register_consts(lua_State *L,const module_consts_t *const consts, const char *name);
+void register_consts(lua_State *L, const module_consts_t *const consts, const char *name);
 
 void dump_lua_stack(lua_State *L);
