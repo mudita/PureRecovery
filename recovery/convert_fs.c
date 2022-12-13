@@ -65,53 +65,6 @@ static int create_ext4_fs(struct ext4_blockdev *blkdev, const char *label, const
     return ext4_mkfs(&fs, blkdev, &mkfs_info, F_SET_EXT4);
 }
 
-static bool copy_data(const char *src_path, const char *dst_path) {
-    bool success = false;
-    int err;
-
-    do {
-        struct statvfs src_stat;
-        err = vfs_statvfs(src_path, &src_stat);
-        if (err != 0) {
-            debug_log("Failed to statvfs %s, error %d", src_path, err);
-            break;
-        }
-
-        struct statvfs dst_stat;
-        err = vfs_statvfs(dst_path, &dst_stat);
-        if (err != 0) {
-            debug_log("Failed to statvfs %s, error %d", dst_path, err);
-            break;
-        }
-
-        const uint64_t src_used_space = (uint64_t) (src_stat.f_blocks - src_stat.f_bfree) * (uint64_t) src_stat.f_bsize;
-        const uint64_t dst_free_space = (uint64_t) dst_stat.f_bfree * (uint64_t) dst_stat.f_bsize;
-        if (dst_free_space < src_used_space) {
-            debug_log("Not enough space on %s for backup (%lu MB < %lu MB)", dst_path, dst_free_space / 1024 / 1024,
-                      src_used_space / 1024 / 1024);
-            break;
-        }
-
-        if (!recursive_cp(src_path, dst_path)) {
-            debug_log("Copying from %s to %s failed", src_path, dst_path);
-            break;
-        }
-
-        success = true;
-
-    } while (0);
-
-    return success;
-}
-
-static bool tmp_location_valid(const char *mount_point, const char *tmp_path) {
-    const size_t mp_len = strlen(mount_point);
-    if ((strncmp(mount_point, tmp_path, mp_len) == 0) && ((tmp_path[mp_len] == '\0') || (tmp_path[mp_len] == '/'))) {
-        return false;
-    }
-    return true;
-}
-
 static void log_uuid(const uint8_t *uuid) {
     char buffer[2 * UUID_SIZE + 4 + 2];
     char *buffer_ptr = &buffer[0];
@@ -171,22 +124,6 @@ static enum convert_fs_state_e convert_fs(const struct convert_fs_config_s *conf
         }
 
         debug_log("Detected FAT OS partition, starting conversion");
-
-        /* Check if directory for the backup is not on the converted partition */
-        if (!tmp_location_valid(config->mount_point, config->tmp_dir_path)) {
-            debug_log("Backup temporary directory cannot be placed on the partition being converted!");
-            err = CONVERSION_FAILED;
-            break;
-        }
-
-        /* Backup all the files, since now, we have no file logs */
-        debug_log("Creating partition backup");
-        flush_logs();
-        if (!copy_data(config->mount_point, config->tmp_dir_path)) {
-            debug_log("Failed to create partition backup");
-            err = CONVERSION_FAILED;
-            break;
-        }
 
         /* Unmount partitions*/
         debug_log("Unmounting partitions");
@@ -261,22 +198,6 @@ static enum convert_fs_state_e convert_fs(const struct convert_fs_config_s *conf
         /* Log filesystem parameters */
         debug_log("Filesystem parameters:");
         log_partition_info(&info);
-
-        /* Restore files from the backup */
-        debug_log("Restoring partition data from backup");
-        if (!copy_data(config->tmp_dir_path, config->mount_point)) {
-            debug_log("Failed to restore data from backup");
-            err = CONVERSION_FAILED;
-            break;
-        }
-
-        /* Remove backup */
-        debug_log("Removing partition data backup");
-        if (!recursive_unlink(config->tmp_dir_path)) {
-            debug_log("Failed to restore data from backup");
-            err = CONVERSION_FAILED;
-            break;
-        }
 
         err = CONVERSION_SUCCESS;
     } while (0);
