@@ -190,6 +190,16 @@ static enum convert_fs_state_e convert_fs(const struct convert_fs_config_s *conf
             err = CONVERSION_FAILED;
             break;
         }
+
+        /* Create directory for logs, as everything has been removed during formatting */
+        const char *const log_dir_path = get_log_directory();
+        err = mkdir(log_dir_path, 0666);
+        if (err) {
+            debug_log("Failed to create directory '%s', error %d\n", log_dir_path, errno);
+            err = CONVERSION_FAILED;
+            break;
+        }
+
         /* Logging to file is available again */
         redirect_logs_to_file(get_log_filename());
         debug_log("Partitions remounted");
