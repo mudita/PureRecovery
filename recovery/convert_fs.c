@@ -125,6 +125,9 @@ static enum convert_fs_state_e convert_fs(const struct convert_fs_config_s *conf
 
         debug_log("Detected FAT OS partition, starting conversion");
 
+        /* Flush logs and close log file before unmounting */
+        flush_logs();
+
         /* Unmount partitions*/
         debug_log("Unmounting partitions");
         err = vfs_unmount_deinit();

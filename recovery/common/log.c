@@ -25,5 +25,6 @@ void redirect_logs_to_file(const char *name) {
 void flush_logs() {
     if (log_file_handle != NULL) {
         fclose(log_file_handle);
+        log_file_handle = NULL;
     }
 }
