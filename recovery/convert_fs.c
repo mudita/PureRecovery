@@ -18,7 +18,6 @@
 #include <errno.h>
 #include <string.h>
 #include <stdio.h>
-#include <sys/statvfs.h>
 
 struct change_ext4_label_config_s {
     const char *mount_point;
@@ -29,7 +28,7 @@ struct convert_fs_config_s {
     const char *mount_point;
     const struct vfs_mount_point_desc *fstab;
     size_t fstab_size;
-    const char *tmp_dir_path;
+    const char *log_tmp_dir;
     const char *uuid;
     const char *label;
 };
@@ -96,6 +95,14 @@ static void log_partition_info(const struct ext4_mkfs_info *info) {
     debug_log("label: %s", info->label);
 }
 
+static bool tmp_location_valid(const char *src_path, const char *tmp_path) {
+    const size_t mp_len = strlen(src_path);
+    if ((strncmp(src_path, tmp_path, mp_len) == 0) && ((tmp_path[mp_len] == '\0') || (tmp_path[mp_len] == '/'))) {
+        return false;
+    }
+    return true;
+}
+
 static enum convert_fs_state_e convert_fs(const struct convert_fs_config_s *config) {
     int err;
     struct vfs_mount *mp;
@@ -128,49 +135,63 @@ static enum convert_fs_state_e convert_fs(const struct convert_fs_config_s *conf
         /* Flush logs and close log file before unmounting */
         flush_logs();
 
-        /* Unmount partitions*/
+        /* Create a backup of current log directory, as it will be deleted */
+        const char *const log_dir_path = get_log_directory();
+        if (!tmp_location_valid(log_dir_path, config->log_tmp_dir)) {
+            debug_log("Temporary directory cannot be placed on the partition being converted");
+            err = CONVERSION_FAILED;
+            break;
+        }
+
+        if (!recursive_cp(log_dir_path, config->log_tmp_dir)) {
+            debug_log("Failed to create logs backup");
+            err = CONVERSION_FAILED;
+            break;
+        }
+
+        /* Unmount partitions */
         debug_log("Unmounting partitions");
         err = vfs_unmount_deinit();
         if (err) {
-            debug_log("Failed to unmount partitions, error %d\n", err);
+            debug_log("Failed to unmount partitions, error %d", err);
             err = CONVERSION_FAILED;
             break;
         }
 
         /* Erase FAT boot record */
-        debug_log("Erasing FAT boot record\n");
+        debug_log("Erasing FAT boot record");
         err = erase_fat_boot_record(device);
         if (err) {
-            debug_log("Failed to erase FAT boot record, error %d\n", err);
+            debug_log("Failed to erase FAT boot record, error %d", err);
             err = CONVERSION_FAILED;
             break;
         }
 
         /* Create ext4 block device */
-        debug_log("Creating ext4 block device\n");
+        debug_log("Creating ext4 block device");
         struct ext4_blockdev *blockdev;
         err = vfs_ext4_append_volume(device, &blockdev);
-        debug_log("(^^^ this warning is normal ^^^)\n");
+        debug_log("(^^^ this warning is normal ^^^)");
         if (err) {
-            debug_log("Failed to create block device, error: %d\n", err);
+            debug_log("Failed to create block device, error: %d", err);
             err = CONVERSION_FAILED;
             break;
         }
 
         /* Format partition as ext4 */
-        debug_log("Formatting partition as ext4\n");
+        debug_log("Formatting partition as ext4");
         err = create_ext4_fs(blockdev, config->label, (const uint8_t *) config->uuid);
         if (err) {
-            debug_log("Failed to format partition, error: %d\n", err);
+            debug_log("Failed to format partition, error: %d", err);
             err = CONVERSION_FAILED;
             break;
         }
 
         /* Update partition info in MBR */
-        debug_log("Updating partition type in MBR\n");
+        debug_log("Updating partition type in MBR");
         err = mbr_set_partition_type(device, blk_part_type_ext4);
         if (err) {
-            debug_log("MBR updating failed, error %d\n", err);
+            debug_log("MBR updating failed, error %d", err);
             err = CONVERSION_FAILED;
             break;
         }
@@ -178,7 +199,7 @@ static enum convert_fs_state_e convert_fs(const struct convert_fs_config_s *conf
         struct ext4_mkfs_info info;
         err = ext4_mkfs_read_info(blockdev, &info);
         if (err) {
-            debug_log("Reading filesystem info failed, error %d\n", err);
+            debug_log("Reading filesystem info failed, error %d", err);
             err = CONVERSION_FAILED;
             break;
         }
@@ -189,16 +210,23 @@ static enum convert_fs_state_e convert_fs(const struct convert_fs_config_s *conf
         /* Remount partitions */
         err = vfs_mount_init(config->fstab, config->fstab_size);
         if (err) {
-            debug_log("Failed to remount partitions, error %d\n", err);
+            debug_log("Failed to remount partitions, error %d", err);
             err = CONVERSION_FAILED;
             break;
         }
 
-        /* Create directory for logs, as everything has been removed during formatting */
-        const char *const log_dir_path = get_log_directory();
-        err = mkdir(log_dir_path, 0666);
-        if (err) {
-            debug_log("Failed to create directory '%s', error %d\n", log_dir_path, errno);
+        /* Restore the backup of the logs */
+        debug_log("Restoring logs backup");
+        if (!recursive_cp(config->log_tmp_dir, log_dir_path)) {
+            debug_log("Failed to restore logs backup");
+            err = CONVERSION_FAILED;
+            break;
+        }
+
+        /* Remove the backup */
+        debug_log("Removing logs backup");
+        if (!recursive_unlink(config->log_tmp_dir)) {
+            debug_log("Failed to remove logs backup");
             err = CONVERSION_FAILED;
             break;
         }
@@ -256,7 +284,7 @@ static bool change_partition_label(const struct change_ext4_label_config_s *conf
         struct ext4_mkfs_info info;
         err = ext4_mkfs_read_info(blockdev, &info);
         if (err) {
-            debug_log("Reading filesystem info failed, error %d\n", err);
+            debug_log("Reading filesystem info failed, error %d", err);
             break;
         }
 
@@ -264,7 +292,7 @@ static bool change_partition_label(const struct change_ext4_label_config_s *conf
         struct fs_aux_info aux_info;
         err = create_fs_aux_info(&aux_info, &info);
         if (err) {
-            debug_log("Creating filesystem auxiliary info failed, error %d\n", err);
+            debug_log("Creating filesystem auxiliary info failed, error %d", err);
             break;
         }
 
@@ -274,7 +302,7 @@ static bool change_partition_label(const struct change_ext4_label_config_s *conf
         /* Update all filesystem's superblocks */
         err = write_sblocks(blockdev, &aux_info, &info);
         if (err) {
-            debug_log("Failed to update superblocks, error %d\n", err);
+            debug_log("Failed to update superblocks, error %d", err);
             break;
         }
 
@@ -335,12 +363,12 @@ enum convert_fs_state_e repartition_fs(void) {
             .mount_point = get_system_mount_point(),
             .fstab = fstab,
             .fstab_size = sizeof fstab,
-            .tmp_dir_path = "/user/tmp_backup",
+            .log_tmp_dir = "/user/tmp_backup",
             .uuid = generate_uuid(),
             .label = slot_a_label
     };
 
-    ret = check_temp_dir(cfsconfig.tmp_dir_path);
+    ret = check_temp_dir(cfsconfig.log_tmp_dir);
     if (ret != 0) {
         debug_log("Failed to prepare temp directory");
         return CONVERSION_FAILED;
