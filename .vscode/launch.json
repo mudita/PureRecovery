@@ -1,0 +1,27 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Launch BellHybrid PureRecovery (RT1051)",
+            "type": "cortex-debug",
+            "request": "launch",
+            "executable": "${workspaceFolder}/build-BellHybrid-rt1051-Debug/PureRecovery.elf",
+            "servertype": "jlink",
+            "serverpath": "JLinkGDBServerCLExe",
+            "cwd": "${workspaceFolder}",
+            "gdbPath": "arm-none-eabi-gdb",
+            "serverArgs": ["-strict", "-ir", "-speed", "25000"],
+            "interface": "swd",
+            "device": "MCIMXRT1051",
+            "jlinkscript": "${workspaceFolder}/evkbimxrt1050_sdram_init_T6.jlinkscript",
+            "overrideLaunchCommands": [
+                "monitor reset 0",
+                "monitor halt",
+                "monitor memU32 0x401BC000 = 128;",
+                "load",
+                "b main",
+                "b ResetISR",
+            ]
+        },
+    ]
+}

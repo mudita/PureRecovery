@@ -1,0 +1,91 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+            "type": "shell",
+            "label": "Build BellHybrid PureRecovery (RT1051)",
+            "command": "make",
+            "args": [
+                "-j`nproc`"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/build-BellHybrid-rt1051-Debug"
+            },
+            "group": "build",
+            "detail": "Build dir has to be configured with Cmake",
+        },
+        {
+            "type": "shell",
+            "label": "Build PurePhone PureRecovery (RT1051)",
+            "command": "make",
+            "args": [
+                "-j`nproc`"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/build-PurePhone-rt1051-Debug"
+            },
+            "group": "build",
+            "detail": "Build dir has to be configured with Cmake",
+        },
+        {
+            "type": "shell",
+            "label": "Configure BellHybrid RelWithDebInfo (RT1051)",
+            "command": "./configure.sh",
+            "args": [
+                "bell",
+                "rt1051",
+                "RelWithDebInfo"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "detail": "Run cmake configure script",
+        },
+        {
+            "type": "shell",
+            "label": "Configure BellHybrid Debug (RT1051)",
+            "command": "./configure.sh",
+            "args": [
+                "bell",
+                "rt1051",
+                "Debug"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "detail": "Run cmake configure script",
+        },
+        {
+            "type": "shell",
+            "label": "Configure PurePhone RelWithDebInfo (RT1051)",
+            "command": "./configure.sh",
+            "args": [
+                "pure",
+                "rt1051",
+                "RelWithDebInfo"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "detail": "Run cmake configure script",
+        },
+        {
+            "type": "shell",
+            "label": "Configure PurePhone Debug (RT1051)",
+            "command": "./configure.sh",
+            "args": [
+                "pure",
+                "rt1051",
+                "Debug"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "detail": "Run cmake configure script",
+        },
+	]
+}
