@@ -2,8 +2,8 @@
 #include <prv/blkdev/blk_dev.h>
 #include <prv/blkdev/partscan.h>
 #include <hal/emmc.h>
-#include <drivers/sdmmc/fsl_mmc.h>
-#include <drivers/sdmmc/fsl_sdmmc_host.h>
+#include <fsl_mmc.h>
+#include <fsl_sdmmc_host.h>
 #include <errno.h>
 #include <stdio.h>
 
