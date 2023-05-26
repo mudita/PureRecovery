@@ -3,6 +3,7 @@ add_library(hal STATIC)
 target_sources(hal
     PRIVATE
         system.c
+        charger.c
     PUBLIC
         include/hal/system.h
 )

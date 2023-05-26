@@ -13,7 +13,7 @@
 #include <prv/hal/i2c_dev.h>
 #include <boot/board.h>
 #include <stdio.h>
-
+#include "charger.h"
 static struct hal_i2c_dev i2c_gen = {.base = (uintptr_t)BOARD_KEYBOARD_I2C_BASEADDR, .initialized = false};
 
 /** Initialize basic system setup */
@@ -28,6 +28,7 @@ void system_initialize(void)
     SNVS_LP_Init(SNVS);
     SNVS_HP_Init(SNVS);
     delay_init();
+    charger_init();
     // Initialize emmc card
     if (emmc_init())
     {
