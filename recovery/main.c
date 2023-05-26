@@ -123,20 +123,26 @@ int destroy_environment() {
     return err;
 }
 
+#include "usb/vcom/virtual_com.h"
+#include "usb/mtp/mtp.h"
+#include <hal/display.h>
 int __attribute__((noinline, used)) main() {
     int err = prepare_environment();
     if (err != 0) {
         return err;
     }
 
-    lua_State *L = prepare_lua_context();
-    err = invoke_entry_point(L, entry_point);
-    if (err) {
-        debug_log("Error occurs when executing entry point, Hint Machine 0x%x", err);
-        debug_log("Error: %s", lua_tostring(L, -1));
-    }
+    usb_init();
+    usb_daemon();
 
-    debug_log("PureRecovery finished, exiting...");
+//    lua_State *L = prepare_lua_context();
+//    err = invoke_entry_point(L, entry_point);
+//    if (err) {
+//        debug_log("Error occurs when executing entry point, Hint Machine 0x%x", err);
+//        debug_log("Error: %s", lua_tostring(L, -1));
+//    }
+//
+//    debug_log("PureRecovery finished, exiting...");
     destroy_environment();
     return err;
 }
