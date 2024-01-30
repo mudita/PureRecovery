@@ -68,6 +68,8 @@ EinkInitialize(EinkBpp_e bpp)
     lpspi_master_config_t masterConfig;
     int i;
 
+    LPSPI_MasterGetDefaultConfig(&masterConfig);
+
     /*Set clock source for LPSPI*/
     //    CLOCK_SetMux(kCLOCK_LpspiMux, BOARD_EINK_LPSPI_CLOCK_SOURCE_SELECT);
     //    CLOCK_SetDiv(kCLOCK_LpspiDiv, BOARD_EINK_LPSPI_CLOCK_SOURCE_DIVIDER);
