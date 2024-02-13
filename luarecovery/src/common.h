@@ -6,7 +6,9 @@
 #include <lauxlib.h>
 
 #define UNUSED(expr) do { (void)(expr); } while (0)
-#define ARRAY_SIZE(array)       (sizeof(array)/sizeof((array)[0]))
+#define ARRAY_SIZE(array) (sizeof(array)/sizeof((array)[0]))
+
+#define MIN(a,b) ((a) < (b) ? (a) : (b))
 
 typedef struct {
     const char *name;

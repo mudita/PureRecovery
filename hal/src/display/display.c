@@ -8,7 +8,6 @@
  */
 
 #include <hal/display.h>
-#include <hal/ED028TC1.h>
 #include "fonts.h"
 #include <boot/board.h>
 #include <stdio.h>
@@ -16,9 +15,17 @@
 
 #define EINK_LINE_LEN (BOARD_EINK_DISPLAY_RES_X / 17 - 2)
 #define EINK_MAX_LINES (BOARD_EINK_DISPLAY_RES_Y / 24)
+#define IMAGE_BUFFER_SIZE ((BOARD_EINK_DISPLAY_RES_X * BOARD_EINK_DISPLAY_RES_Y) / PIXELS_PER_BYTE)
+#define SCREEN_BUFFER_SIZE (IMAGE_BUFFER_COMMAND_SIZE + IMAGE_BUFFER_SIZE)
 
-static unsigned char eink_bmp_buf[2 + (BOARD_EINK_DISPLAY_RES_X * BOARD_EINK_DISPLAY_RES_Y / 8)];
+static uint8_t eink_bmp_buf[SCREEN_BUFFER_SIZE];
 static char eink_text_buf[EINK_MAX_LINES][EINK_LINE_LEN + 1];
+static const EinkFrame_t full_frame = {
+        .x = 0,
+        .y = 0,
+        .w = BOARD_EINK_DISPLAY_RES_Y,
+        .h = BOARD_EINK_DISPLAY_RES_X
+};
 
 /**
  * @brief  Draws a character on LCD.
@@ -69,6 +76,17 @@ static void draw_char(uint16_t xpos, uint16_t ypos, const uint8_t *c) {
             }
         }
         ypos++;
+    }
+}
+
+static void put_pixel(uint16_t x, uint16_t y, bool color) {
+    const size_t byte = ((BOARD_EINK_DISPLAY_RES_X - x) * BOARD_EINK_DISPLAY_RES_Y + (BOARD_EINK_DISPLAY_RES_Y - y)) / 8;
+    const size_t bit = 7 - (((BOARD_EINK_DISPLAY_RES_X - x) * BOARD_EINK_DISPLAY_RES_Y + (BOARD_EINK_DISPLAY_RES_Y - y)) % 8);
+    if (color) {
+        eink_bmp_buf[2 + byte] &= ~(1 << bit);
+    }
+    else {
+        eink_bmp_buf[2 + byte] |= (1 << bit);
     }
 }
 
@@ -146,11 +164,14 @@ void eink_display_string_at(uint16_t xpos, uint16_t ypos, const char *text, eink
     }
 }
 
-void eink_refresh_text(uint16_t x, uint16_t y, uint16_t w, uint16_t h) {
+EinkStatus_e eink_refresh_text(const EinkFrame_t *frame, EinkRefreshMode_e mode) {
+    if (frame == NULL) {
+        return EinkInitErr;
+    }
 
     eink_bmp_buf[0] = EinkDataStartTransmission1;
     eink_bmp_buf[1] = 0;
-    EinkDisplayImage(x, y, w, h, eink_bmp_buf);
+    return EinkDisplayImage(frame, eink_bmp_buf, mode);
 }
 
 void eink_log(const char *text, bool flush) {
@@ -185,7 +206,8 @@ void eink_log_refresh() {
                                EINK_LEFT_MODE);
         i++;
     }
-    eink_refresh_text(0, 0, BOARD_EINK_DISPLAY_RES_Y, BOARD_EINK_DISPLAY_RES_X);
+
+    eink_refresh_text(&full_frame, REFRESH_DEEP);
 }
 
 void eink_clear_log(void) {
@@ -200,33 +222,35 @@ void eink_init(void) {
     for (i = 0; i < (480 * 600 / 8); i++) {
         eink_bmp_buf[2 + i] = 0xFF;
     }
-    EinkInitialize(Eink1Bpp);
+    EinkInitialize();
 }
 
 void eink_log_printf(const char *fmt, ...) {
     char buf[EINK_LINE_LEN + 1];
     va_list args;
     va_start(args, fmt);
-    vsnprintf(buf, sizeof buf, fmt, args);
+    vsnprintf(buf, sizeof(buf), fmt, args);
     eink_log(buf, false);
     va_end(args);
 }
 
-static void put_pixel(uint16_t x, uint16_t y,bool colour) {
-    size_t byte = ((BOARD_EINK_DISPLAY_RES_X - x) * BOARD_EINK_DISPLAY_RES_Y + (BOARD_EINK_DISPLAY_RES_Y - y)) / 8;
-    size_t bit = 7 - (((BOARD_EINK_DISPLAY_RES_X - x) * BOARD_EINK_DISPLAY_RES_Y + (BOARD_EINK_DISPLAY_RES_Y - y)) % 8);
-    if(colour){
-        eink_bmp_buf[2 + byte] &= ~(1 << bit);
-    }else{
-        eink_bmp_buf[2 + byte] |= (1 << bit);
+void eink_write_rectangle(const EinkFrame_t *frame, bool color) {
+    if (frame == NULL) {
+        return;
+    }
+
+    for (uint32_t dy = 0; dy < frame->h; dy++) {
+        for (uint32_t dx = 0; dx < frame->w; dx++) {
+            put_pixel(BOARD_EINK_DISPLAY_RES_X - (frame->y + dy), frame->x + dx, color);
+        }
     }
 }
 
-void eink_write_rectangle(uint16_t x, uint16_t y, uint16_t w, uint16_t h,bool colour) {
-
-    for (uint32_t i = 0; i < h; i++) {
-        for (uint32_t j = 0; j < w; j++) {
-            put_pixel(x + j, y + i,colour);
-        }
+EinkStatus_e eink_display_image(const uint8_t *pixels, size_t size) {
+    if ((pixels == NULL) || (size > sizeof(eink_bmp_buf))) {
+        return EinkInitErr;
     }
+
+    memcpy(eink_bmp_buf, pixels, size);
+    return eink_refresh_text(&full_frame, REFRESH_DEEP);
 }

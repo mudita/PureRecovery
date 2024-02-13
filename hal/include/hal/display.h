@@ -11,6 +11,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <hal/ED028TC1.h>
 
 #ifdef __cplusplus
 extern "C"
@@ -24,7 +25,6 @@ typedef enum eink_align_mode {
     EINK_CENTER_MODE = 0x01, /*!< Center mode */
     EINK_RIGHT_MODE = 0x02,  /*!< Right mode  */
     EINK_LEFT_MODE = 0x03    /*!< Left mode   */
-
 } eink_align_mode_t;
 
 /** Initialize eink display
@@ -38,25 +38,22 @@ void eink_init(void);
  */
 void eink_display_char(uint16_t xpos, uint16_t ypos, uint8_t ascii);
 
-/** Display string begining from position
+/** Display string beginning from position
  * @param xpos X starting position
  * @param ypos Y starting position
  * @param text Text for display
- * @param mode Alignement mode @see eink_align_mode
+ * @param mode Alignment mode @see eink_align_mode
  */
 void eink_display_string_at(uint16_t xpos, uint16_t ypos, const char *text, eink_align_mode_t mode);
 
 /** Display refresh text at selected position
- * @param x X starting position
- * @param y Y starting position
- * @param w Width of clean area
- * @param h Weight of clean area
+ * @param frame - pointer to struct describing image frame, i.e. x, y, width, height
  */
-void eink_refresh_text(uint16_t x, uint16_t y, uint16_t w, uint16_t h);
+EinkStatus_e eink_refresh_text(const EinkFrame_t *frame, EinkRefreshMode_e mode);
 
 /** Display to the eink like log console
  * @param text Text for display
- * @param interactive True if interactive refreshing enabled
+ * @param flush whether an immediate refresh is required
  */
 void eink_log(const char *text, bool flush);
 
@@ -67,13 +64,24 @@ void eink_log_printf(const char *fmt, ...) __attribute__((format(printf, 1, 2)))
 
 /** Flush log into the display
  */
-void eink_log_refresh();
+void eink_log_refresh(void);
 
 /** Clear eink log console
  */
 void eink_clear_log(void);
 
-void eink_write_rectangle(uint16_t x, uint16_t y, uint16_t w, uint16_t h, bool);
+/** Write rectangle to the display
+ * @param frame - pointer to struct describing image frame, i.e. x, y, width, height
+ * @param black - color of the rectangle to write
+ */
+void eink_write_rectangle(const EinkFrame_t *frame, bool black);
+
+/** Write raw bitmap to the display
+ * @param pixels - pixel data of the image in display's format
+ * @param size - size of the image data
+ * @return EinkOk if successful
+ */
+EinkStatus_e eink_display_image(const uint8_t *pixels, size_t size);
 
 #ifdef __cplusplus
 }
