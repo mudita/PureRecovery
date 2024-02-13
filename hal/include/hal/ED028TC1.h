@@ -30,16 +30,19 @@ typedef enum
   EinkTimeout              //!< Timeout occured while waiting for nWait signale from EINK
 } EinkStatus_e;
 
-/**
- * @enum EinkBpp_e
- */
-typedef enum
+typedef enum {
+    REFRESH_FAST,
+    REFRESH_DEEP,
+    REFRESH_NONE
+} EinkRefreshMode_e;
+
+typedef struct
 {
-  Eink1Bpp = 1,//!< Eink1Bpp
-  Eink2Bpp,    //!< Eink2Bpp
-  Eink3Bpp,    //!< Eink3Bpp
-  Eink4Bpp     //!< Eink4Bpp
-} EinkBpp_e;
+    uint16_t x;
+    uint16_t y;
+    uint16_t w;
+    uint16_t h;
+} EinkFrame_t;
 
 /* Exported constants --------------------------------------------------------*/
 /* Exported macro ------------------------------------------------------------*/
@@ -54,6 +57,7 @@ typedef enum
 #define EinkBoosterSoftStart              (0x07U)
 #define EinkDataStartTransmission1        (0x10U)
 #define EinkDisplayRefresh                (0x12U)
+#define EinkDataStartTransmission2        (0x13U)
 #define EinkPLLControl                    (0x30U)
 #define EinkVcomAndDataIntervalSetting    (0x50U)
 #define EinkTCONSetting                   (0x60U)
@@ -189,14 +193,15 @@ typedef enum
 #define GDOS_M7         (7<<0)
 #define VBD_FN          (0)     //VBorder frame number seting: 0-VBD disabled, 1-VBD=8, ... 1Fh-VBD=248
 
-/* Exported functions ------------------------------------------------------- */
-EinkStatus_e EinkInitialize (EinkBpp_e bpp);
-EinkStatus_e EinkDisplayImage (uint16_t X, uint16_t Y, uint16_t W, uint16_t H, uint8_t *buffer);
-EinkStatus_e EinkClearWindow (uint16_t X, uint16_t Y, uint16_t W, uint16_t H);
-EinkStatus_e EinkClearScreen (void);
-EinkStatus_e EinkRefreshImage (uint16_t X, uint16_t Y, uint16_t W, uint16_t H);
-void EinkEnableFrontlight (bool enable);
+#define PIXELS_PER_BYTE           8 // In 1bpp mode
+#define IMAGE_BUFFER_COMMAND_SIZE 2 // One for data transmission start command, one for mode (1bpp)
 
+/* Exported functions ------------------------------------------------------- */
+EinkStatus_e EinkInitialize(void);
+EinkStatus_e EinkDisplayImage(const EinkFrame_t *frame, uint8_t *buffer, EinkRefreshMode_e mode);
+EinkStatus_e EinkClearScreen(void);
+EinkStatus_e EinkRefreshImage(const EinkFrame_t *frame, EinkRefreshMode_e mode);
+void EinkEnableFrontlight(bool enable);
 
 #endif /* __ED028TC1_H */
 

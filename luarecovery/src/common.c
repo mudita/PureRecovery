@@ -58,5 +58,3 @@ void register_consts(lua_State *L, const module_consts_t *const consts, const ch
     }
     lua_setfield(L, -2, name);
 }
-
-

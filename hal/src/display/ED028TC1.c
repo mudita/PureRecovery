@@ -8,391 +8,42 @@
  */
 
 #include <hal/ED028TC1.h>
-#include "LUT.h"
+#include "LUTS.h"
 #include <stdbool.h>
 #include <boot/board.h>
-//#include "peripherals.h"
 #include "fsl_common.h"
 #include "fsl_lpspi.h"
 #include <hal/delay.h>
-#include <boot/board.h>
 
-/* External variable definitions */
-#define _delay_ms(ms) msleep(ms)
-//#define ARRAY_SIZE(array)       (sizeof(array)/sizeof(array[0]))
+/* Defines */
 #define EINK_TIMEOUT 1000
+#define TRANSFER_BAUDRATE 2000000U /*! Transfer baudrate - 500k */
 
-#define EINK_WAIT()                                                                             \
-    _timeout = EINK_TIMEOUT;                                                                    \
-    while ((GPIO_PinRead(BOARD_EINK_BUSY_GPIO, BOARD_EINK_BUSY_GPIO_PIN) == 0) && (--_timeout)) \
-    {                                                                                           \
-        _delay_ms(1);                                                                           \
-    }                                                                                           \
-    if (_timeout == 0)                                                                          \
-    return (EinkTimeout)
+#define IMAGE_BUFFER_SIZE ((BOARD_EINK_DISPLAY_RES_X * BOARD_EINK_DISPLAY_RES_Y) / PIXELS_PER_BYTE)
+#define EMPTY_SCREEN_BUFFER_SIZE (IMAGE_BUFFER_COMMAND_SIZE + IMAGE_BUFFER_SIZE)
 
-#define EXAMPLE_LPSPI_MASTER_PCS_FOR_INIT (kLPSPI_Pcs0)
-#define EXAMPLE_LPSPI_MASTER_PCS_FOR_TRANSFER (kLPSPI_MasterPcs0)
-#define TRANSFER_BAUDRATE (2000000U) /*! Transfer baudrate - 500k */
-
-/* Internal variable definitions */
-EinkBpp_e BPP = Eink1Bpp;
-uint32_t _timeout;
-GPIO_Type *base;
-
-static unsigned char EINK_WHITE_SCREEN1_1BPP[2 + (480 * 600 / 8)] = {EinkDataStartTransmission1, 0x00, [2 ...(480 * 600 / 8 - 1)] = 0xFF};
-
-/* Internal function prototypes */
-EinkStatus_e
-_WriteCommand(uint8_t command);
-EinkStatus_e
-_WriteData(uint8_t data, uint8_t setCS);
-EinkStatus_e
-_WriteBuffer(uint8_t *buffer, uint32_t size);
-uint8_t
-_ReadData(void);
+static uint8_t eink_screen_1bpp[EMPTY_SCREEN_BUFFER_SIZE];
+static const EinkFrame_t full_frame = {
+        .x = 0,
+        .y = 0,
+        .w = BOARD_EINK_DISPLAY_RES_Y,
+        .h = BOARD_EINK_DISPLAY_RES_X
+};
 
 /* Function bodies */
-
 /**
- * @brief Initialize ED028TC1 E-Ink display
- * @param bpp \refEinkBpp_t Bits per pixel
- * @return returns \ref EinkStatus_e.EinkOK if display initialization was OK
+ * @brief Internal function. Wait for display controller to finish last operation.
+ * @return \ref EinkStatus_e.EinkOK if command was sent, \ref EinkStatus_e.EinkTimeout if timeout occurred
  */
-EinkStatus_e
-EinkInitialize(EinkBpp_e bpp)
-{
-    unsigned char tmpbuf[10];
-    /* Define the init structure for the output LED pin*/
-    gpio_pin_config_t gpio_config = {kGPIO_DigitalOutput, 0, kGPIO_NoIntmode};
-    lpspi_master_config_t masterConfig;
-    int i;
-
-    /*Set clock source for LPSPI*/
-    //    CLOCK_SetMux(kCLOCK_LpspiMux, BOARD_EINK_LPSPI_CLOCK_SOURCE_SELECT);
-    //    CLOCK_SetDiv(kCLOCK_LpspiDiv, BOARD_EINK_LPSPI_CLOCK_SOURCE_DIVIDER);
-
-    /*Master config*/
-    masterConfig.baudRate = TRANSFER_BAUDRATE;
-    masterConfig.bitsPerFrame = 8;
-    masterConfig.cpol = kLPSPI_ClockPolarityActiveHigh;
-    masterConfig.cpha = kLPSPI_ClockPhaseFirstEdge;
-    masterConfig.direction = kLPSPI_MsbFirst;
-
-    masterConfig.pcsToSckDelayInNanoSec = 1000000000 / masterConfig.baudRate;
-    masterConfig.lastSckToPcsDelayInNanoSec = 1000000000 / masterConfig.baudRate;
-    masterConfig.betweenTransferDelayInNanoSec = 1000000000 / masterConfig.baudRate;
-
-    //    masterConfig.whichPcs = EXAMPLE_LPSPI_MASTER_PCS_FOR_INIT;
-    //    masterConfig.pcsActiveHighOrLow = kLPSPI_PcsActiveLow;
-
-    masterConfig.pinCfg = kLPSPI_SdiInSdoOut;
-    masterConfig.dataOutConfig = kLpspiDataOutRetained;
-
-    LPSPI_MasterInit(BOARD_EINK_LPSPI_BASE, &masterConfig, BOARD_EINK_LPSPI_CLOCK_FREQ);
-    LPSPI_Enable(BOARD_EINK_LPSPI_BASE, false);
-    BOARD_EINK_LPSPI_BASE->CFGR1 &= (~LPSPI_CFGR1_NOSTALL_MASK);
-    LPSPI_Enable(BOARD_EINK_LPSPI_BASE, true);
-
-    /*Flush FIFO , clear status , disable all the inerrupts.*/
-    LPSPI_FlushFifo(BOARD_EINK_LPSPI_BASE, true, true);
-    LPSPI_ClearStatusFlags(BOARD_EINK_LPSPI_BASE, kLPSPI_AllStatusFlag);
-    LPSPI_DisableInterrupts(BOARD_EINK_LPSPI_BASE, kLPSPI_AllInterruptEnable);
-
-    //    BOARD_EINK_LPSPI_BASE->TCR =
-    //            (BOARD_EINK_LPSPI_BASE->TCR &
-    //                    ~(LPSPI_TCR_CONT_MASK | LPSPI_TCR_CONTC_MASK | LPSPI_TCR_RXMSK_MASK | LPSPI_TCR_PCS_MASK)) |
-    //                    LPSPI_TCR_CONT(0) | LPSPI_TCR_CONTC(0) | LPSPI_TCR_RXMSK(0) | LPSPI_TCR_TXMSK(0) | LPSPI_TCR_PCS(EXAMPLE_LPSPI_MASTER_PCS_FOR_INIT);
-
-    GPIO_PinInit(BOARD_EINK_RESET_GPIO, BOARD_EINK_RESET_GPIO_PIN, &gpio_config);
-    GPIO_PinWrite(BOARD_EINK_RESET_GPIO, BOARD_EINK_RESET_GPIO_PIN, 1U);
-
-    //CS
-    GPIO_PinInit(BOARD_EINK_CS_GPIO, BOARD_EINK_CS_GPIO_PIN, &gpio_config);
-    GPIO_PinWrite(BOARD_EINK_CS_GPIO, BOARD_EINK_CS_GPIO_PIN, 1U);
-
-    gpio_config.direction = kGPIO_DigitalInput;
-    GPIO_PinInit(BOARD_EINK_BUSY_GPIO, BOARD_EINK_BUSY_GPIO_PIN, &gpio_config);
-
-    // enable frontlight by default
-    gpio_config.direction = kGPIO_DigitalOutput;
-    GPIO_PinInit(BOARD_EINK_FL_GPIO, BOARD_EINK_FL_GPIO_PIN, &gpio_config);
-    GPIO_PinWrite(BOARD_EINK_FL_GPIO, BOARD_EINK_FL_GPIO_PIN, 1U);
-
-    BPP = bpp;
-
-    GPIO_PinWrite(BOARD_EINK_RESET_GPIO, BOARD_EINK_RESET_GPIO_PIN, 0U);
-    _delay_ms(100);
-    GPIO_PinWrite(BOARD_EINK_RESET_GPIO, BOARD_EINK_RESET_GPIO_PIN, 1U);
-    _delay_ms(100);
-
-    EINK_WAIT();
-
-    //fill white screen table
-    EINK_WHITE_SCREEN1_1BPP[0] = EinkDataStartTransmission1;
-    EINK_WHITE_SCREEN1_1BPP[1] = 0x00;
-    for (i = 0; i < (480 * 600 / 8); i++)
-        EINK_WHITE_SCREEN1_1BPP[2 + i] = 0xFF;
-
-    //send initialization data
-
-    //    _WriteCommand(EinkPowerON);   //Power ON   0x04
-    //    _delay_ms(1);       //1st transmission is somhow corrupted - data is lagging CS. So mak this one dummy and repeat it after some delay
-
-    //    _WriteCommand(EinkPowerON);   //Power ON   0x04
-    //    EINK_WAIT();
-
-    tmpbuf[0] = EinkPowerSetting; //0x04
-    tmpbuf[1] = 0x03;
-    tmpbuf[2] = 0x04;
-    tmpbuf[3] = 0x00;
-    tmpbuf[4] = 0x00;
-    _WriteBuffer(tmpbuf, 5);
-
-    tmpbuf[0] = EinkPanelSetting; //0x00
-    tmpbuf[1] = 0x25;             //0x25 -> _XON _RES0 LUT_SEL _DM - SHL _SPIWM RST_N
-    tmpbuf[2] = 0x00;
-    _WriteBuffer(tmpbuf, 3);
-
-    tmpbuf[0] = 0x26; //Power saving  //0x26
-    tmpbuf[1] = 0x82; //B2
-    _WriteBuffer(tmpbuf, 2);
-
-    tmpbuf[0] = EinkPowerOFFSequenceSetting; //0x03
-    tmpbuf[1] = 0x03;
-    _WriteBuffer(tmpbuf, 2);
-
-    tmpbuf[0] = EinkBoosterSoftStart; //0x07
-    tmpbuf[1] = 0xEF;
-    tmpbuf[2] = 0xEF;
-    tmpbuf[3] = 0x28;
-    _WriteBuffer(tmpbuf, 4);
-
-    //0xE0, 0x02    GDOS
-    tmpbuf[0] = EinkGDOrderSetting; //0xE0
-    tmpbuf[1] = 0x02;
-    _WriteBuffer(tmpbuf, 2);
-
-    tmpbuf[0] = EinkPLLControl; //0x30
-    tmpbuf[1] = 0x0E;
-    _WriteBuffer(tmpbuf, 2);
-
-    tmpbuf[0] = 0x41; //Temp. sensor setting TSE
-    tmpbuf[1] = 0x00;
-    _WriteBuffer(tmpbuf, 2);
-
-    tmpbuf[0] = EinkVcomAndDataIntervalSetting; //0x50
-    tmpbuf[1] = 0x0D;
-    tmpbuf[2] = 0x22;
-    _WriteBuffer(tmpbuf, 3);
-
-    tmpbuf[0] = EinkTCONSetting; //0x60
-    tmpbuf[1] = 0x3F;
-    tmpbuf[2] = 0x09;
-    tmpbuf[3] = 0x2D;
-    _WriteBuffer(tmpbuf, 4);
-
-    tmpbuf[0] = EinkResolutionSetting; //0x61
-    tmpbuf[1] = 0x02;                  //0x02
-    tmpbuf[2] = 0x58;                  //0x60
-    tmpbuf[3] = 0x01;                  //0x01
-    tmpbuf[4] = 0xE0;                  //0xE0
-    _WriteBuffer(tmpbuf, 5);
-
-    //0xE0, 0x02    GDOS
-    tmpbuf[0] = EinkGDOrderSetting;
-    tmpbuf[1] = 0x02;
-    _WriteBuffer(tmpbuf, 2);
-
-    tmpbuf[0] = EinkVCM_DCSetting; //0x82
-    tmpbuf[1] = 0x30;
-    _WriteBuffer(tmpbuf, 2);
-
-    //LUT
-    _WriteBuffer((uint8_t *)EINK_LUTC, sizeof(EINK_LUTC));
-    _WriteBuffer((uint8_t *)EINK_LUTD, sizeof(EINK_LUTD));
-
-    //_WriteCommand(EinkPowerON);    //0x04
-    EINK_WAIT();
-
-    //0xE0, 0x02    GDOS
-    tmpbuf[0] = EinkGDOrderSetting;
-    tmpbuf[1] = 0x02;
-    _WriteBuffer(tmpbuf, 2);
-
-    //refresh
-    tmpbuf[0] = EinkDisplayRefresh;
-    tmpbuf[1] = 0x08;
-    tmpbuf[2] = 0x00;
-    tmpbuf[3] = 0x00;
-    tmpbuf[4] = 0x00;
-    tmpbuf[5] = 0x00;
-    tmpbuf[6] = 0x02;
-    tmpbuf[7] = 0x58;
-    tmpbuf[8] = 0x01;
-    tmpbuf[9] = 0xE0;
-    _WriteBuffer(tmpbuf, 10);
-    EINK_WAIT();
-
-    //_WriteCommand(EinkPowerOFF);    //0x02
-    EINK_WAIT();
-
-    //EinkClearScreen();
-
-    _delay_ms(200);
-
+static EinkStatus_e eink_wait(void) {
+    uint32_t timeout = EINK_TIMEOUT;
+    while ((GPIO_PinRead(BOARD_EINK_BUSY_GPIO, BOARD_EINK_BUSY_GPIO_PIN) == 0) && (--timeout)) {
+        msleep(1);
+    }
+    if (timeout == 0) {
+        return EinkTimeout;
+    }
     return EinkOK;
-} //EinkInitialize
-
-/**
- * @brief Display image
- * @param X image start position X
- * @param Y image start position Y
- * @param W image width
- * @param H image height
- * @param buffer pointer to image encoded according to BPP set in initialization
- */
-EinkStatus_e
-EinkDisplayImage(uint16_t X, uint16_t Y, uint16_t W, uint16_t H,
-                 uint8_t *buffer)
-{
-    uint8_t buf[10];
-    uint32_t tmp;
-
-    buf[0] = EinkDataStartTransmissionWindow; //set display window
-    buf[1] = (uint8_t)(X >> 8);               //MSB
-    buf[2] = (uint8_t)X;                      //LSB
-    buf[3] = (uint8_t)(Y >> 8);               //MSB
-    buf[4] = (uint8_t)Y;                      //LSB
-    buf[5] = (uint8_t)(W >> 8);               //MSB
-    buf[6] = (uint8_t)W;                      //LSB
-    buf[7] = (uint8_t)(H >> 8);               //MSB
-    buf[8] = (uint8_t)H;                      //LSB
-    _WriteBuffer(buf, 9);
-    EINK_WAIT();
-
-    tmp = ((uint32_t)W * (uint32_t)H / 8) + 2;
-    _WriteBuffer(buffer, tmp);
-
-    EINK_WAIT();
-
-    _WriteCommand(EinkPowerON); //0x04
-    EINK_WAIT();
-
-    //0xE0, 0x02    GDOS
-    buf[0] = EinkGDOrderSetting;
-    buf[1] = 0x02;
-    _WriteBuffer(buf, 2);
-
-    EinkRefreshImage(X, Y, W, H);
-
-    _WriteCommand(EinkPowerOFF); //0x02
-    EINK_WAIT();
-
-    return (EinkOK);
-}
-
-/**
- * @brief Clear screen
- */
-EinkStatus_e
-EinkClearScreen(void)
-{
-    uint8_t buf[10];
-    //display white
-    //DTMW
-    buf[0] = EinkDataStartTransmissionWindow; //0x83
-    buf[1] = 0x00;
-    buf[2] = 0x00;
-    buf[3] = 0x00;
-    buf[4] = 0x00;
-    buf[5] = 0x02;
-    buf[6] = 0x58;
-    buf[7] = 0x01;
-    buf[8] = 0xE0;
-    _WriteBuffer(buf, 9);
-    EINK_WAIT();
-
-    //image
-    _WriteBuffer((uint8_t *)EINK_WHITE_SCREEN1_1BPP, sizeof(EINK_WHITE_SCREEN1_1BPP));
-    EINK_WAIT();
-
-    _WriteCommand(EinkPowerON); //0x04
-    EINK_WAIT();
-
-    //0xE0, 0x02    GDOS
-    buf[0] = EinkGDOrderSetting;
-    buf[1] = 0x02;
-    _WriteBuffer(buf, 2);
-
-    //refresh
-    buf[0] = EinkDisplayRefresh;
-    buf[1] = 0x08;
-    buf[2] = 0x00;
-    buf[3] = 0x00;
-    buf[4] = 0x00;
-    buf[5] = 0x00;
-    buf[6] = 0x02;
-    buf[7] = 0x58;
-    buf[8] = 0x01;
-    buf[9] = 0xE0;
-    _WriteBuffer(buf, 10);
-    EINK_WAIT();
-
-    _WriteCommand(EinkPowerOFF); //0x02
-    EINK_WAIT();
-
-    /*
-     * 0x83, 0, 0, 0, 0, 0x02, 0x58, 0x01, 0xE0
-     * 0x10, 0x03 ... obrazek
-     * 0x04
-     * 0xE0, 0x02
-     * 0x12, 0x08, 0x00, 0x00, 0x00, 0x00, 0x02, 0x58, 0x01, 0xE0
-     * 0x02
-     */
-
-    return EinkOK;
-}
-
-/**
- * @brief Refresh window on the screen. E-paper display tends to loose contrast over time. To Keep the image sharp refresh is needed.
- * @param X refresh window position X
- * @param Y refresh window position Y
- * @param W refresh window width
- * @param H refresh window height
- */
-EinkStatus_e
-EinkRefreshImage(uint16_t X, uint16_t Y, uint16_t W, uint16_t H)
-{
-    uint8_t buf[10];
-
-    buf[0] = EinkDisplayRefresh; //refresh image
-    buf[1] = 0x08;               //for now - magic number
-
-    buf[2] = (uint8_t)(X >> 8); //MSB
-    buf[3] = (uint8_t)X;        //LSB
-    buf[4] = (uint8_t)(Y >> 8); //MSB
-    buf[5] = (uint8_t)Y;        //LSB
-    buf[6] = (uint8_t)(W >> 8); //MSB
-    buf[7] = (uint8_t)W;        //LSB
-    buf[8] = (uint8_t)(H >> 8); //MSB
-    buf[9] = (uint8_t)H;        //LSB
-
-    _WriteBuffer(buf, sizeof(buf));
-    /* this delay is needed because without it data sent trhough SPI get corrupted. No idea why :/ */
-    _delay_ms(1);
-    EINK_WAIT();
-
-    return EinkOK;
-}
-
-/**
- * @brief Enable or disable the frontlight
- * @param enable enable (true) or disable (false)
- */
-void EinkEnableFrontlight(bool enable)
-{
-    GPIO_PinWrite(BOARD_EINK_FL_GPIO, BOARD_EINK_FL_GPIO_PIN, (uint8_t)enable);
 }
 
 /**
@@ -400,8 +51,7 @@ void EinkEnableFrontlight(bool enable)
  * @param command command to be written
  * @return \ref EinkStatus_e.EinkOK if command was sent
  */
-EinkStatus_e
-_WriteCommand(uint8_t command)
+static EinkStatus_e WriteCommand(uint8_t command)
 {
     lpspi_transfer_t transfer;
     GPIO_PinWrite(BOARD_EINK_CS_GPIO, BOARD_EINK_CS_GPIO_PIN, 0U);
@@ -416,39 +66,15 @@ _WriteCommand(uint8_t command)
 }
 
 /**
- * @brief Internal function. Write data to display controller
- * @param data data byte to be written
- * @return \ref EinkStatus_e.EinkOK if data was sent
- */
-EinkStatus_e
-_WriteData(uint8_t data, uint8_t setCS)
-{
-    (void)setCS;
-    lpspi_transfer_t transfer;
-    GPIO_PinWrite(BOARD_EINK_CS_GPIO, BOARD_EINK_CS_GPIO_PIN, 0U);
-    transfer.configFlags = kLPSPI_MasterPcs0 | kLPSPI_MasterPcsContinuous;
-    transfer.dataSize = 1;
-    transfer.txData = &data;
-    transfer.rxData = NULL;
-    LPSPI_MasterTransferBlocking(BOARD_EINK_LPSPI_BASE, &transfer);
-    GPIO_PinWrite(BOARD_EINK_CS_GPIO, BOARD_EINK_CS_GPIO_PIN, 1U);
-
-    return EinkOK;
-}
-
-/**
  * @brief Internal function. Send buffer to the display
  * @param buffer pointer to image buffer
  * @param size size of image buffer
  * @return \ref EinkStatus_e.EinkOK if buffer was sent
  */
-EinkStatus_e
-_WriteBuffer(uint8_t *buffer, uint32_t size)
+static EinkStatus_e WriteBuffer(uint8_t *buffer, uint32_t size)
 {
     lpspi_transfer_t transfer;
     GPIO_PinWrite(BOARD_EINK_CS_GPIO, BOARD_EINK_CS_GPIO_PIN, 0U);
-    //    LPSPI_WriteData(BOARD_EINK_LPSPI_BASE, (uint32_t)command);
-    //    while (!(LPSPI_GetStatusFlags(BOARD_EINK_LPSPI_BASE) & kLPSPI_TransferCompleteFlag));
     transfer.configFlags = kLPSPI_MasterPcs0 | kLPSPI_MasterPcsContinuous;
     transfer.dataSize = size;
     transfer.txData = buffer;
@@ -460,17 +86,233 @@ _WriteBuffer(uint8_t *buffer, uint32_t size)
 }
 
 /**
- * @brief Read data from display
- * @return value of data read
+ * @brief Initialize ED028TC1 E-Ink display
+ * @return returns \ref EinkStatus_e.EinkOK if display initialization was OK
  */
-uint8_t
-_ReadData(void)
+EinkStatus_e EinkInitialize()
 {
-    uint8_t data = 0;
-    //if (SPIXfer (EinkSPIHandle, (void*) &dummy, (void*) &data, sizeof(uint8_t),
-    //             1) != SPIOK)
-    //    return EinkSPIErr;
-    data = (uint8_t)LPSPI_ReadData(BOARD_EINK_LPSPI_BASE);
+    uint8_t buf[10];
 
-    return data;
+    /* Define the init structure for the output pins */
+    gpio_pin_config_t gpio_config = {kGPIO_DigitalOutput, 0, kGPIO_NoIntmode};
+    lpspi_master_config_t masterConfig;
+
+    /* Master config */
+    masterConfig.baudRate = TRANSFER_BAUDRATE;
+    masterConfig.bitsPerFrame = 8;
+    masterConfig.cpol = kLPSPI_ClockPolarityActiveHigh;
+    masterConfig.cpha = kLPSPI_ClockPhaseFirstEdge;
+    masterConfig.direction = kLPSPI_MsbFirst;
+
+    masterConfig.pcsToSckDelayInNanoSec = 1000000000 / masterConfig.baudRate;
+    masterConfig.lastSckToPcsDelayInNanoSec = 1000000000 / masterConfig.baudRate;
+    masterConfig.betweenTransferDelayInNanoSec = 1000000000 / masterConfig.baudRate;
+
+    masterConfig.pinCfg = kLPSPI_SdiInSdoOut;
+    masterConfig.dataOutConfig = kLpspiDataOutRetained;
+
+    LPSPI_MasterInit(BOARD_EINK_LPSPI_BASE, &masterConfig, BOARD_EINK_LPSPI_CLOCK_FREQ);
+    LPSPI_Enable(BOARD_EINK_LPSPI_BASE, false);
+    BOARD_EINK_LPSPI_BASE->CFGR1 |= LPSPI_CFGR1_AUTOPCS(0);
+    BOARD_EINK_LPSPI_BASE->CFGR1 &= (~LPSPI_CFGR1_NOSTALL_MASK);
+    LPSPI_SetMasterSlaveMode(BOARD_EINK_LPSPI_BASE, kLPSPI_Master);
+    LPSPI_Enable(BOARD_EINK_LPSPI_BASE, true);
+
+    /* Flush FIFO, clear status, disable all the interrupts */
+    LPSPI_FlushFifo(BOARD_EINK_LPSPI_BASE, true, true);
+    LPSPI_ClearStatusFlags(BOARD_EINK_LPSPI_BASE, kLPSPI_AllStatusFlag);
+    LPSPI_DisableInterrupts(BOARD_EINK_LPSPI_BASE, kLPSPI_AllInterruptEnable);
+
+    /* Put display in reset state */
+    GPIO_PinInit(BOARD_EINK_RESET_GPIO, BOARD_EINK_RESET_GPIO_PIN, &gpio_config);
+    GPIO_PinWrite(BOARD_EINK_RESET_GPIO, BOARD_EINK_RESET_GPIO_PIN, 0U);
+
+    /* Deselect device */
+    GPIO_PinInit(BOARD_EINK_CS_GPIO, BOARD_EINK_CS_GPIO_PIN, &gpio_config);
+    GPIO_PinWrite(BOARD_EINK_CS_GPIO, BOARD_EINK_CS_GPIO_PIN, 1U);
+
+    /* Configure busy pin */
+    gpio_config.direction = kGPIO_DigitalInput;
+    GPIO_PinInit(BOARD_EINK_BUSY_GPIO, BOARD_EINK_BUSY_GPIO_PIN, &gpio_config);
+
+    /* Enable frontlight by default */
+    gpio_config.direction = kGPIO_DigitalOutput;
+    GPIO_PinInit(BOARD_EINK_FL_GPIO, BOARD_EINK_FL_GPIO_PIN, &gpio_config);
+    GPIO_PinWrite(BOARD_EINK_FL_GPIO, BOARD_EINK_FL_GPIO_PIN, 1U);
+
+    /* Release reset condition */
+    GPIO_PinWrite(BOARD_EINK_RESET_GPIO, BOARD_EINK_RESET_GPIO_PIN, 1U);
+    msleep(100);
+    eink_wait();
+
+    /* Configure registers */
+    buf[0] = EinkPanelSetting;
+    buf[1] = 0x25;
+    buf[2] = 0x00;
+    WriteBuffer(buf, 3);
+
+    buf[0] = EinkPowerSetting;
+    buf[1] = 0x03;
+    buf[2] = 0x04;
+    buf[3] = 0x00;
+    buf[4] = 0x00;
+    WriteBuffer(buf, 5);
+
+    buf[0] = EinkPowerOFFSequenceSetting;
+    buf[1] = 0x03;
+    WriteBuffer(buf, 2);
+
+    buf[0] = EinkBoosterSoftStart;
+    buf[1] = 0xEF;
+    buf[2] = 0xEF;
+    buf[3] = 0x28;
+    WriteBuffer(buf, 4);
+
+    buf[0] = EinkPLLControl;
+    buf[1] = 0x0E;
+    WriteBuffer(buf, 2);
+
+    buf[0] = 0x41; //Temp. sensor setting TSE
+    buf[1] = 0x00;
+    WriteBuffer(buf, 2);
+
+    buf[0] = EinkVcomAndDataIntervalSetting;
+    buf[1] = 0x0D;
+    buf[2] = 0x22;
+    WriteBuffer(buf, 3);
+
+    buf[0] = EinkTCONSetting;
+    buf[1] = 0x3F;
+    buf[2] = 0x09;
+    buf[3] = 0x2D;
+    WriteBuffer(buf, 4);
+
+    buf[0] = EinkResolutionSetting;
+    buf[1] = 0x02;
+    buf[2] = 0x60;
+    buf[3] = 0x01;
+    buf[4] = 0xE0;
+    WriteBuffer(buf, 5);
+
+    buf[0] = EinkVCM_DCSetting;
+    buf[1] = 0x30;
+    WriteBuffer(buf, 2);
+
+    buf[0] = EinkGDOrderSetting;
+    buf[1] = 0x02;
+    buf[2] = 0x00;
+    WriteBuffer(buf, 3);
+
+    /* Create white screen array, overwrite both image buffers and refresh (later you can use EinkClearScreen()) */
+    memset(eink_screen_1bpp, 0xFF, sizeof(eink_screen_1bpp));
+    eink_screen_1bpp[0] = EinkDataStartTransmission2;
+    eink_screen_1bpp[1] = 0x00;
+    EinkDisplayImage(&full_frame, (uint8_t *) eink_screen_1bpp, REFRESH_NONE);
+    eink_screen_1bpp[0] = EinkDataStartTransmission1;
+    EinkDisplayImage(&full_frame, (uint8_t *) eink_screen_1bpp, REFRESH_DEEP);
+
+    return EinkOK;
+}
+
+/**
+ * @brief Display image
+ * @param frame pointer to structure containing image frame parameters
+ * @param buffer pointer to image encoded according to BPP set in initialization
+ * @param mode eink refresh mode; fast, deep or no refresh
+ */
+EinkStatus_e EinkDisplayImage(const EinkFrame_t *frame, uint8_t *buffer, EinkRefreshMode_e mode)
+{
+    if ((frame == NULL) || (buffer == NULL)) {
+        return EinkInitErr;
+    }
+
+    uint8_t buf[10];
+
+    buf[0] = EinkDataStartTransmissionWindow; // Set display window
+    buf[1] = (uint8_t) (frame->x >> 8); //MSB
+    buf[2] = (uint8_t) frame->x;		//LSB
+    buf[3] = (uint8_t) (frame->y >> 8); //MSB
+    buf[4] = (uint8_t) frame->y;		//LSB
+    buf[5] = (uint8_t) (frame->w >> 8); //MSB
+    buf[6] = (uint8_t) frame->w;		//LSB
+    buf[7] = (uint8_t) (frame->h >> 8); //MSB
+    buf[8] = (uint8_t) frame->h;		//LSB
+    WriteBuffer(buf, 9);
+    eink_wait();
+
+    const uint32_t img_size = (((uint32_t)frame->w * (uint32_t)frame->w) / PIXELS_PER_BYTE) + IMAGE_BUFFER_COMMAND_SIZE;
+    WriteBuffer(buffer, img_size);
+    eink_wait();
+
+    if (mode != REFRESH_NONE) {
+        WriteCommand(EinkPowerON);
+        eink_wait();
+
+        EinkRefreshImage(frame, mode);
+
+        WriteCommand(EinkPowerOFF);
+        eink_wait();
+    }
+
+    return EinkOK;
+}
+
+/**
+ * @brief Clear screen
+ */
+EinkStatus_e EinkClearScreen(void)
+{
+    return EinkDisplayImage(&full_frame, (uint8_t *)eink_screen_1bpp, REFRESH_DEEP);
+}
+
+/**
+ * @brief Refresh image on the screen.
+ * @param frame pointer to structure containing image frame parameters
+ * @param mode eink refresh mode; fast, deep or no refresh
+ */
+EinkStatus_e EinkRefreshImage(const EinkFrame_t *frame, EinkRefreshMode_e mode)
+{
+    uint8_t buf[10];
+
+    /* Load desired LUT */
+    switch (mode) {
+        case REFRESH_FAST:
+            WriteBuffer((uint8_t *)LUTC_DU2, sizeof(LUTC_DU2));
+            WriteBuffer((uint8_t *)LUTD_DU2, sizeof(LUTD_DU2));
+            eink_wait();
+            break;
+        case REFRESH_DEEP:
+            WriteBuffer((uint8_t *)LUTC_GC16, sizeof(LUTC_GC16));
+            WriteBuffer((uint8_t *)LUTD_GC16, sizeof(LUTD_GC16));
+            eink_wait();
+            break;
+        default:
+            break;
+    }
+
+    buf[0] = EinkDisplayRefresh;
+    buf[1] = 0x08; //Waveform mode 0, clear previous frame, disable update optimization (needs VCOM LUT)
+
+    buf[2] = (uint8_t) (frame->x >> 8); //MSB
+    buf[3] = (uint8_t) frame->x;		//LSB
+    buf[4] = (uint8_t) (frame->y >> 8); //MSB
+    buf[5] = (uint8_t) frame->y;		//LSB
+    buf[6] = (uint8_t) (frame->w >> 8); //MSB
+    buf[7] = (uint8_t) frame->w;		//LSB
+    buf[8] = (uint8_t) (frame->h >> 8); //MSB
+    buf[9] = (uint8_t) frame->h;		//LSB
+
+    WriteBuffer(buf, sizeof(buf));
+    eink_wait();
+
+    return EinkOK;
+}
+
+/**
+ * @brief Enable or disable the frontlight
+ * @param enable enable (true) or disable (false)
+ */
+void EinkEnableFrontlight(bool enable)
+{
+    GPIO_PinWrite(BOARD_EINK_FL_GPIO, BOARD_EINK_FL_GPIO_PIN, (uint8_t)enable);
 }
