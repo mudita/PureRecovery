@@ -24,7 +24,7 @@ static int _display_raw_img(lua_State *L) {
 
     const EinkStatus_e result = eink_display_image((uint8_t *) data, len);
     if (result != EinkOK) {
-        luaL_error(L, "eink_display_image failed with code:", result);
+        luaL_error(L, "eink_display_image failed with code: %d", result);
     }
     return 1;
 }
