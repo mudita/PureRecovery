@@ -97,6 +97,8 @@ EinkStatus_e EinkInitialize()
     gpio_pin_config_t gpio_config = {kGPIO_DigitalOutput, 0, kGPIO_NoIntmode};
     lpspi_master_config_t masterConfig;
 
+    LPSPI_MasterGetDefaultConfig(&masterConfig);
+
     /* Master config */
     masterConfig.baudRate = TRANSFER_BAUDRATE;
     masterConfig.bitsPerFrame = 8;
