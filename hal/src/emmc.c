@@ -42,7 +42,7 @@ status_t emmc_init(void)
 
     mmc_card.busWidth = kMMC_DataBusWidth8bit;
     mmc_card.busTiming = kMMC_HighSpeed200Timing;
-    mmc_card.enablePreDefinedBlockCount = true;
+    mmc_card.enablePreDefinedBlockCount = false; // BIWIN eMMC doesn't work stable when this flag is true
     mmc_card.host->hostController.base = BOARD_MMC_HOST_BASEADDR;
     mmc_card.host->hostController.sourceClock_Hz = BOARD_MMC_HOST_CLK_FREQ;
     mmc_card.usrParam.ioStrength                 = emmc_pin_config;
